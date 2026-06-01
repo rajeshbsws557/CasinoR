@@ -1,0 +1,38 @@
+name: crash_game
+description: "CasinoR — Provably Fair Multiplayer Crash Game by Rajesh Biswas (me)"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_bloc: ^9.1.0
+  web_socket_channel: ^3.0.2
+  dio: ^5.7.0
+  equatable: ^2.0.7
+  go_router: ^15.1.2
+  flutter_secure_storage: ^9.2.4
+  google_fonts: ^6.2.1
+  intl: ^0.20.2
+  audioplayers: ^6.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"
+  web:
+    generate: true
+    image_path: "assets/icon.png"
+
+flutter:
+  uses-material-design: true

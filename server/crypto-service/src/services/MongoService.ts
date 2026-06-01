@@ -1,0 +1,48 @@
+// ============================================
+// MongoDB Service — Client Wrapper
+// ============================================
+
+import { MongoClient, Db } from 'mongodb';
+import { config } from '../config/env';
+
+let client: MongoClient | null = null;
+let db: Db | null = null;
+
+export async function connectMongo(): Promise<Db> {
+  if (db) return db;
+
+  client = new MongoClient(config.mongo.url, {
+    maxPoolSize: 10,
+    minPoolSize: 2,
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 10000,
+  });
+
+  await client.connect();
+  db = client.db(config.mongo.dbName);
+  console.log('[MongoDB] Connected to', config.mongo.dbName);
+
+  return db;
+}
+
+export function getDb(): Db {
+  if (!db) {
+    throw new Error('[MongoDB] Not connected. Call connectMongo() first.');
+  }
+  return db;
+}
+
+export function getClient(): MongoClient {
+  if (!client) {
+    throw new Error('[MongoDB] Not connected. Call connectMongo() first.');
+  }
+  return client;
+}
+
+export async function closeMongo(): Promise<void> {
+  if (client) {
+    await client.close();
+    client = null;
+    db = null;
+  }
+}

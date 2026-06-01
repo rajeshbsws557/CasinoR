@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1779910345653" clover="3.2.0">
+  <project timestamp="1779910345654" name="All files">
+    <metrics statements="24" coveredstatements="23" conditionals="1" coveredconditionals="0" methods="3" coveredmethods="3" elements="28" coveredelements="26" complexity="0" loc="24" ncloc="24" packages="1" files="1" classes="1"/>
+    <file name="CrashCalculator.ts" path="C:\Users\Rajesh\Documents\CasinoR\server\crypto-service\src\crypto\CrashCalculator.ts">
+      <metrics statements="24" coveredstatements="23" conditionals="1" coveredconditionals="0" methods="3" coveredmethods="3"/>
+      <line num="11" count="1" type="stmt"/>
+      <line num="12" count="1" type="stmt"/>
+      <line num="36" count="1" type="stmt"/>
+      <line num="39" count="7" type="stmt"/>
+      <line num="42" count="7" type="stmt"/>
+      <line num="43" count="7" type="stmt"/>
+      <line num="46" count="7" type="stmt"/>
+      <line num="47" count="7" type="stmt"/>
+      <line num="48" count="7" type="stmt"/>
+      <line num="51" count="7" type="stmt"/>
+      <line num="55" count="7" type="cond" truecount="0" falsecount="1"/>
+      <line num="56" count="0" type="stmt"/>
+      <line num="63" count="7" type="stmt"/>
+      <line num="64" count="7" type="stmt"/>
+      <line num="66" count="7" type="stmt"/>
+      <line num="77" count="1" type="stmt"/>
+      <line num="81" count="2" type="stmt"/>
+      <line num="82" count="2" type="stmt"/>
+      <line num="88" count="1" type="stmt"/>
+      <line num="93" count="1" type="stmt"/>
+      <line num="94" count="1" type="stmt"/>
+      <line num="96" count="1" type="stmt"/>
+      <line num="97" count="1" type="stmt"/>
+      <line num="98" count="1" type="stmt"/>
+    </file>
+  </project>
+</coverage>

@@ -1,0 +1,11 @@
+{
+  "databaseName": "admin",
+  "password": "CasinoSecretPassword123!",
+  "roles": [
+    {
+      "databaseName": "admin",
+      "roleName": "atlasAdmin"
+    }
+  ],
+  "username": "casinoadmin"
+}

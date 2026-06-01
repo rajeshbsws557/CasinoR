@@ -1,0 +1,80 @@
+version: "3.9"
+
+services:
+  # ============================================
+  # Reverse Proxy & Load Balancer & Frontend Hosting
+  # ============================================
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: crashgame-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - game-server
+      - api-server
+      - crypto-service
+    networks:
+      - crashgame-net
+    restart: unless-stopped
+
+  # ============================================
+  # Game Server (WebSocket + Game Loop)
+  # ============================================
+  game-server:
+    build:
+      context: ../server/game-server
+      dockerfile: Dockerfile
+    container_name: crashgame-game
+    env_file:
+      - ../server/game-server/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - CRYPTO_SERVICE_URL=http://crypto-service:3002
+    networks:
+      - crashgame-net
+    restart: unless-stopped
+
+  # ============================================
+  # API Server (REST — Auth, Wallet, History)
+  # ============================================
+  api-server:
+    build:
+      context: ../server/api-server
+      dockerfile: Dockerfile
+    container_name: crashgame-api
+    env_file:
+      - ../server/api-server/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - CRYPTO_SERVICE_URL=http://crypto-service:3002
+    networks:
+      - crashgame-net
+    restart: unless-stopped
+
+  # ============================================
+  # Crypto Service (Provably Fair Engine)
+  # ============================================
+  crypto-service:
+    build:
+      context: ../server/crypto-service
+      dockerfile: Dockerfile
+    container_name: crashgame-crypto
+    env_file:
+      - ../server/crypto-service/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+    networks:
+      - crashgame-net
+    restart: unless-stopped
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  crashgame-net:
+    driver: bridge

@@ -1,0 +1,153 @@
+version: "3.9"
+
+services:
+  # ============================================
+  # Reverse Proxy & Load Balancer
+  # ============================================
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: crashgame-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - game-server
+      - api-server
+      - crypto-service
+    networks:
+      - crashgame-net
+    restart: unless-stopped
+
+  # ============================================
+  # Game Server (WebSocket + Game Loop)
+  # ============================================
+  game-server:
+    build:
+      context: ../server/game-server
+      dockerfile: Dockerfile
+    container_name: crashgame-game
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://mongodb:27017/crashgame
+      - CRYPTO_SERVICE_URL=http://crypto-service:3002
+      - JWT_SECRET=${JWT_SECRET}
+      - BETTING_PHASE_MS=${BETTING_PHASE_MS:-7000}
+      - COOLDOWN_PHASE_MS=${COOLDOWN_PHASE_MS:-3000}
+      - TICK_INTERVAL_MS=${TICK_INTERVAL_MS:-50}
+      - GROWTH_RATE=${GROWTH_RATE:-0.00006}
+      - MIN_BET=${MIN_BET:-100}
+      - MAX_BET=${MAX_BET:-1000000}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - crashgame-net
+    restart: unless-stopped
+
+  # ============================================
+  # API Server (REST — Auth, Wallet, History)
+  # ============================================
+  api-server:
+    build:
+      context: ../server/api-server
+      dockerfile: Dockerfile
+    container_name: crashgame-api
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://mongodb:27017/crashgame
+      - CRYPTO_SERVICE_URL=http://crypto-service:3002
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - crashgame-net
+    restart: unless-stopped
+
+  # ============================================
+  # Crypto Service (Provably Fair Engine)
+  # ============================================
+  crypto-service:
+    build:
+      context: ../server/crypto-service
+      dockerfile: Dockerfile
+    container_name: crashgame-crypto
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://mongodb:27017/crashgame
+      - HOUSE_EDGE_DIVISOR=${HOUSE_EDGE_DIVISOR:-33}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - crashgame-net
+    restart: unless-stopped
+
+  # ============================================
+  # Redis (In-Memory State + Pub/Sub)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: crashgame-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - crashgame-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================
+  # MongoDB (Persistent Storage)
+  # ============================================
+  mongodb:
+    image: mongo:7
+    container_name: crashgame-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    environment:
+      - MONGO_INITDB_DATABASE=crashgame
+    networks:
+      - crashgame-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  redis-data:
+    driver: local
+  mongo-data:
+    driver: local
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  crashgame-net:
+    driver: bridge

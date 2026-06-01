@@ -1,0 +1,6 @@
+[
+  {
+    "cidrBlock": "0.0.0.0/0",
+    "comment": "Allow all IP addresses"
+  }
+]
