@@ -1,4 +1,4 @@
-const API_URL = 'http://4.240.88.100:3000/api/admin';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://4.240.88.100/api/admin';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
