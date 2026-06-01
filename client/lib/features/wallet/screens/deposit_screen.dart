@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:crash_game/config/theme.dart';
 import 'package:crash_game/features/wallet/repositories/wallet_repository.dart';
+import 'package:crash_game/features/game/widgets/animated_space_background.dart';
 
 class DepositScreen extends StatefulWidget {
   const DepositScreen({super.key});
@@ -161,114 +162,116 @@ class _DepositScreenState extends State<DepositScreen> {
         ),
         iconTheme: const IconThemeData(color: AppTheme.textPrimary),
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // ── Method Selector ──
-            _buildMethodSelector(),
-            const SizedBox(height: 20),
-
-            // ── Payment Number Card ──
-            _buildPaymentNumberCard(),
-            const SizedBox(height: 20),
-
-            // ── Instructions ──
-            if (_instructions.isNotEmpty) ...[
-              _buildInstructions(),
+      body: AnimatedSpaceBackground(
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ── Method Selector ──
+              _buildMethodSelector(),
               const SizedBox(height: 20),
-            ],
 
-            // ── Amount Input ──
-            _buildInputField(
-              controller: _amountController,
-              label: 'Amount (BDT)',
-              hint: 'e.g. 500',
-              prefix: '৳',
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+              // ── Payment Number Card ──
+              _buildPaymentNumberCard(),
+              const SizedBox(height: 20),
+
+              // ── Instructions ──
+              if (_instructions.isNotEmpty) ...[
+                _buildInstructions(),
+                const SizedBox(height: 20),
               ],
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                'Min: ৳${(_minDeposit / 100).toStringAsFixed(0)} • Max: ৳${(_maxDeposit / 100).toStringAsFixed(0)}',
-                style: GoogleFonts.inter(color: AppTheme.textMuted, fontSize: 12),
+
+              // ── Amount Input ──
+              _buildInputField(
+                controller: _amountController,
+                label: 'Amount (BDT)',
+                hint: 'e.g. 500',
+                prefix: '৳',
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                ],
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // ── Transaction ID Input ──
-            _buildInputField(
-              controller: _txIdController,
-              label: 'Transaction ID',
-              hint: 'Enter your ${_selectedMethod == 'bkash' ? 'bKash' : 'Nagad'} Transaction ID',
-              keyboardType: TextInputType.text,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
-                LengthLimitingTextInputFormatter(30),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // ── Error / Success Messages ──
-            if (_errorMessage != null)
-              _buildMessage(_errorMessage!, isError: true),
-            if (_successMessage != null)
-              _buildMessage(_successMessage!, isError: false),
-            if (_errorMessage != null || _successMessage != null)
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  'Min: ৳${(_minDeposit / 100).toStringAsFixed(0)} • Max: ৳${(_maxDeposit / 100).toStringAsFixed(0)}',
+                  style: GoogleFonts.inter(color: AppTheme.textMuted, fontSize: 12),
+                ),
+              ),
               const SizedBox(height: 16),
 
-            // ── Submit Button ──
-            SizedBox(
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitDeposit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C853),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: const Color(0xFF00C853).withAlpha(80),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isSubmitting
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        'SUBMIT DEPOSIT',
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
+              // ── Transaction ID Input ──
+              _buildInputField(
+                controller: _txIdController,
+                label: 'Transaction ID',
+                hint: 'Enter your ${_selectedMethod == 'bkash' ? 'bKash' : 'Nagad'} Transaction ID',
+                keyboardType: TextInputType.text,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                  LengthLimitingTextInputFormatter(30),
+                ],
               ),
-            ),
-            const SizedBox(height: 32),
+              const SizedBox(height: 20),
 
-            // ── Deposit History ──
-            if (_deposits.isNotEmpty) ...[
-              Text(
-                'Recent Deposits',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+              // ── Error / Success Messages ──
+              if (_errorMessage != null)
+                _buildMessage(_errorMessage!, isError: true),
+              if (_successMessage != null)
+                _buildMessage(_successMessage!, isError: false),
+              if (_errorMessage != null || _successMessage != null)
+                const SizedBox(height: 16),
+
+              // ── Submit Button ──
+              SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _submitDeposit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C853),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFF00C853).withAlpha(80),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          'SUBMIT DEPOSIT',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
                 ),
               ),
-              const SizedBox(height: 12),
-              ..._deposits.map(_buildDepositHistoryItem),
+              const SizedBox(height: 32),
+
+              // ── Deposit History ──
+              if (_deposits.isNotEmpty) ...[
+                Text(
+                  'Recent Deposits',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ..._deposits.map(_buildDepositHistoryItem),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -486,7 +489,7 @@ class _DepositScreenState extends State<DepositScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AppTheme.accentPurple, width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
           ),
         ),
       ],

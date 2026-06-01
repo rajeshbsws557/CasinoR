@@ -11,6 +11,9 @@ import {
   getPendingWithdrawals,
   completeWithdrawal,
   rejectWithdrawal,
+  getDashboardStats,
+  getUsers,
+  updateUserBalance,
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -26,5 +29,12 @@ router.post('/deposits/:id/reject', rejectDeposit);
 router.get('/withdrawals/pending', getPendingWithdrawals);
 router.post('/withdrawals/:id/complete', completeWithdrawal);
 router.post('/withdrawals/:id/reject', rejectWithdrawal);
+
+// Dashboard stats
+router.get('/stats', getDashboardStats);
+
+// User management
+router.get('/users', getUsers);
+router.post('/users/:id/balance', updateUserBalance);
 
 export default router;

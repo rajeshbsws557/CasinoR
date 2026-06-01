@@ -199,10 +199,146 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
         totalWagered: user.total_wagered,
         totalProfit: user.total_profit,
         createdAt: user.created_at,
+        paymentMethods: user.payment_methods || [],
       },
     });
   } catch (error) {
     console.error('[AuthController] getProfile error:', error);
     res.status(500).json({ success: false, error: 'Failed to get profile' });
+  }
+}
+
+/**
+ * PUT /api/auth/profile
+ * Updates the authenticated user's profile (username).
+ */
+export async function updateProfile(req: Request, res: Response): Promise<void> {
+  try {
+    const { username } = req.body;
+
+    if (!username || typeof username !== 'string') {
+      res.status(400).json({ success: false, error: 'Username is required' });
+      return;
+    }
+
+    if (username.length < 3 || username.length > 20) {
+      res.status(400).json({ success: false, error: 'Username must be 3-20 characters' });
+      return;
+    }
+
+    const db = getDb();
+    const { ObjectId } = await import('mongodb');
+    const userOid = new ObjectId(req.user!.userId);
+
+    // Check if username is taken by another user
+    const existing = await db.collection('users').findOne({
+      username: username.toLowerCase(),
+      _id: { $ne: userOid },
+    });
+
+    if (existing) {
+      res.status(409).json({ success: false, error: 'Username is already taken' });
+      return;
+    }
+
+    const result = await db.collection('users').findOneAndUpdate(
+      { _id: userOid },
+      {
+        $set: {
+          username: username.toLowerCase(),
+          updated_at: new Date(),
+        },
+      },
+      { returnDocument: 'after', projection: { password_hash: 0 } },
+    );
+
+    if (!result) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: result._id.toString(),
+        username: result.username,
+        email: result.email,
+        balance: result.balance,
+        totalWagered: result.total_wagered,
+        totalProfit: result.total_profit,
+        createdAt: result.created_at,
+        paymentMethods: result.payment_methods || [],
+      },
+    });
+  } catch (error) {
+    console.error('[AuthController] updateProfile error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update profile' });
+  }
+}
+
+/**
+ * PUT /api/auth/payment-methods
+ * Updates the authenticated user's payment methods (bKash/Nagad).
+ */
+export async function updatePaymentMethods(req: Request, res: Response): Promise<void> {
+  try {
+    const { payment_methods } = req.body;
+
+    if (!Array.isArray(payment_methods)) {
+      res.status(400).json({ success: false, error: 'payment_methods must be an array' });
+      return;
+    }
+
+    // Validate each payment method
+    const validTypes = ['bkash', 'nagad'];
+    const validated: Array<{ type: string; phone_number: string }> = [];
+
+    for (const method of payment_methods) {
+      if (!method.type || !validTypes.includes(method.type)) {
+        res.status(400).json({ success: false, error: `Invalid payment type: ${method.type}. Must be bkash or nagad` });
+        return;
+      }
+      if (!method.phone_number || typeof method.phone_number !== 'string') {
+        res.status(400).json({ success: false, error: 'Phone number is required for each payment method' });
+        return;
+      }
+      // Strip non-digits and validate length
+      const digits = method.phone_number.replace(/\D/g, '');
+      if (digits.length < 11 || digits.length > 14) {
+        res.status(400).json({ success: false, error: 'Phone number must be 11-14 digits' });
+        return;
+      }
+      validated.push({ type: method.type, phone_number: digits });
+    }
+
+    const db = getDb();
+    const { ObjectId } = await import('mongodb');
+    const userOid = new ObjectId(req.user!.userId);
+
+    const result = await db.collection('users').findOneAndUpdate(
+      { _id: userOid },
+      {
+        $set: {
+          payment_methods: validated,
+          updated_at: new Date(),
+        },
+      },
+      { returnDocument: 'after', projection: { password_hash: 0 } },
+    );
+
+    if (!result) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        paymentMethods: result.payment_methods || [],
+      },
+    });
+  } catch (error) {
+    console.error('[AuthController] updatePaymentMethods error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update payment methods' });
   }
 }

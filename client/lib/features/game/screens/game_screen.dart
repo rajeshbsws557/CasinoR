@@ -12,6 +12,8 @@ import 'package:crash_game/features/game/widgets/crash_graph.dart';
 import 'package:crash_game/features/game/widgets/bet_panel.dart';
 import 'package:crash_game/features/game/widgets/game_history_bar.dart';
 import 'package:crash_game/features/chat/widgets/chat_panel.dart';
+import 'package:crash_game/features/game/widgets/animated_space_background.dart';
+import 'package:crash_game/core/widgets/glass_container.dart';
 
 import 'package:flutter/services.dart';
 import 'package:crash_game/core/audio/sound_manager.dart';
@@ -45,9 +47,35 @@ class _GameScreenState extends State<GameScreen> {
         }
       },
       child: Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            builder: (context) => Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: DraggableScrollableSheet(
+                initialChildSize: 0.5,
+                minChildSize: 0.3,
+                maxChildSize: 0.9,
+                expand: false,
+                builder: (context, scrollController) {
+                  return ChatPanel(scrollController: scrollController);
+                },
+              ),
+            ),
+          );
+        },
+        backgroundColor: AppTheme.accentPurple,
+        child: const Icon(Icons.chat_bubble_outline),
+      ),
+      body: AnimatedSpaceBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
             // ─── Top Bar ───
             _buildTopBar(),
 
@@ -100,7 +128,15 @@ class _GameScreenState extends State<GameScreen> {
                           multiplierHistory: state.multiplierHistory,
                           currentMultiplier: state.currentMultiplier,
                           phase: state.phase,
-                          cashoutMultiplier: state.cashoutMultiplier,
+                          cashoutMultiplier: state.myBets.any((b) => b.isCashedOut)
+                              ? state.myBets.firstWhere((b) => b.isCashedOut).cashoutMultiplier
+                              : null,
+                          cashoutProfit: state.myBets.any((b) => b.isCashedOut)
+                              ? state.myBets.firstWhere((b) => b.isCashedOut).cashoutProfit
+                              : null,
+                          betAmount: state.myBets.any((b) => b.isCashedOut)
+                              ? state.myBets.firstWhere((b) => b.isCashedOut).amount
+                              : null,
                         ),
                       ),
                     ),
@@ -120,24 +156,21 @@ class _GameScreenState extends State<GameScreen> {
             const SizedBox(height: 8),
 
             // ─── Bet Panel ───
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: const BetPanel(),
-            ),
-            const SizedBox(height: 8),
-
-            // ─── Chat Panel ───
             Expanded(
-              flex: 3,
+              flex: 4,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: const ChatPanel(),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: SingleChildScrollView(
+                  child: const BetPanel(),
+                ),
               ),
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     ),
+      ),
     );
   }
 
@@ -166,13 +199,9 @@ class _GameScreenState extends State<GameScreen> {
           BlocBuilder<AuthBloc, AuthState>(
             builder: (context, state) {
               if (state is AuthAuthenticated) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.card,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.border),
-                  ),
+                return GlassContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  borderRadius: BorderRadius.circular(20),
                   child: Row(
                     children: [
                       const Icon(Icons.account_balance_wallet,

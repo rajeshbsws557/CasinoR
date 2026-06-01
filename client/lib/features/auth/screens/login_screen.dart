@@ -140,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Submit Button
                         SizedBox(
                           width: double.infinity,
-                          height: 48,
+                          height: 52,
                           child: BlocBuilder<AuthBloc, AuthState>(
                             builder: (context, state) {
                               final isLoading = state is AuthLoading;

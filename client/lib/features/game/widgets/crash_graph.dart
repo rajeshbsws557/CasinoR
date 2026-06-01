@@ -13,6 +13,8 @@ class CrashGraph extends StatelessWidget {
   final double currentMultiplier;
   final GamePhase phase;
   final double? cashoutMultiplier;
+  final int? cashoutProfit;
+  final int? betAmount;
 
   const CrashGraph({
     super.key,
@@ -20,6 +22,8 @@ class CrashGraph extends StatelessWidget {
     required this.currentMultiplier,
     required this.phase,
     this.cashoutMultiplier,
+    this.cashoutProfit,
+    this.betAmount,
   });
 
   @override
@@ -31,6 +35,8 @@ class CrashGraph extends StatelessWidget {
           currentMultiplier: currentMultiplier,
           phase: phase,
           cashoutMultiplier: cashoutMultiplier,
+          cashoutProfit: cashoutProfit,
+          betAmount: betAmount,
         ),
         size: Size.infinite,
       ),
@@ -43,12 +49,16 @@ class _CrashGraphPainter extends CustomPainter {
   final double currentMultiplier;
   final GamePhase phase;
   final double? cashoutMultiplier;
+  final int? cashoutProfit;
+  final int? betAmount;
 
   _CrashGraphPainter({
     required this.points,
     required this.currentMultiplier,
     required this.phase,
     this.cashoutMultiplier,
+    this.cashoutProfit,
+    this.betAmount,
   });
 
   @override
@@ -61,9 +71,6 @@ class _CrashGraphPainter extends CustomPainter {
       size.height - padding.top - padding.bottom,
     );
 
-    // Draw background gradient
-    _drawBackground(canvas, size);
-
     // Draw grid
     _drawGrid(canvas, graphRect);
 
@@ -74,25 +81,17 @@ class _CrashGraphPainter extends CustomPainter {
 
     // Draw multiplier text
     _drawMultiplierText(canvas, size);
-  }
 
-  void _drawBackground(Canvas canvas, Size size) {
-    final bgPaint = Paint()
-      ..shader = ui.Gradient.radial(
-        Offset(size.width * 0.5, size.height * 0.3),
-        size.width * 0.8,
-        [
-          AppTheme.surface.withAlpha(200),
-          AppTheme.background,
-        ],
-      );
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+    // Draw cashout badge in corner (not blocking graph)
+    if (phase == GamePhase.cashedOut && cashoutMultiplier != null) {
+      _drawCashoutBadge(canvas, size);
+    }
   }
 
   void _drawGrid(Canvas canvas, Rect rect) {
     final gridPaint = Paint()
-      ..color = AppTheme.border.withAlpha(60)
-      ..strokeWidth = 0.5;
+      ..color = Colors.white.withOpacity(0.05)
+      ..strokeWidth = 1.0;
 
     final labelStyle = TextStyle(
       color: AppTheme.textMuted,
@@ -140,8 +139,8 @@ class _CrashGraphPainter extends CustomPainter {
 
     // Axes
     final axisPaint = Paint()
-      ..color = AppTheme.border.withAlpha(120)
-      ..strokeWidth = 1.0;
+      ..color = Colors.white.withOpacity(0.15)
+      ..strokeWidth = 2.0;
     canvas.drawLine(
       Offset(rect.left, rect.bottom),
       Offset(rect.right, rect.bottom),
@@ -207,7 +206,7 @@ class _CrashGraphPainter extends CustomPainter {
     // Draw the main curve
     final curvePaint = Paint()
       ..color = curveColor
-      ..strokeWidth = 3
+      ..strokeWidth = 4
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
@@ -225,32 +224,85 @@ class _CrashGraphPainter extends CustomPainter {
         Offset(rect.left, rect.top),
         Offset(rect.left, rect.bottom),
         [
-          curveColor.withAlpha(30),
-          curveColor.withAlpha(5),
+          curveColor.withOpacity(0.4),
+          curveColor.withOpacity(0.0),
         ],
       );
     canvas.drawPath(fillPath, fillPaint);
 
-    // Draw current position dot (pulsing glow)
+    // Draw airplane at curve tip (instead of a dot)
     if (phase == GamePhase.running || phase == GamePhase.cashedOut) {
       final lastPt = Offset(
         lastX,
         rect.bottom - ((points.last - 1.0) / (maxY - 1.0)) * rect.height,
       );
 
-      // Outer glow
-      final dotGlowPaint = Paint()
-        ..color = curveColor.withAlpha(60)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-      canvas.drawCircle(lastPt, 12, dotGlowPaint);
+      // Calculate trajectory angle from last 2 points
+      double angle = -math.pi / 4; // Default: 45 degrees up-right
+      if (points.length >= 2) {
+        final prevIdx = points.length - 2;
+        final prevX = rect.left + (prevIdx / math.max(points.length - 1, 1)) * rect.width;
+        final prevNY = (points[prevIdx] - 1.0) / (maxY - 1.0);
+        final prevY = rect.bottom - prevNY * rect.height;
+        angle = math.atan2(lastPt.dy - prevY, lastPt.dx - prevX);
+      }
 
-      // Inner dot
-      final dotPaint = Paint()..color = curveColor;
-      canvas.drawCircle(lastPt, 5, dotPaint);
+      // Draw thruster/exhaust glow trail behind the plane
+      canvas.save();
+      canvas.translate(lastPt.dx, lastPt.dy);
+      canvas.rotate(angle);
 
-      // White center
-      final dotCenter = Paint()..color = Colors.white;
-      canvas.drawCircle(lastPt, 2, dotCenter);
+      // Exhaust flame trail (behind the plane, i.e. negative x direction)
+      final exhaustPaint = Paint()
+        ..shader = ui.Gradient.linear(
+          const Offset(-40, 0),
+          const Offset(0, 0),
+          [
+            curveColor.withOpacity(0.0),
+            curveColor.withOpacity(0.5),
+            Colors.white.withOpacity(0.8),
+          ],
+          [0.0, 0.6, 1.0],
+        )
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+      final exhaustPath = Path()
+        ..moveTo(-35, -5)
+        ..quadraticBezierTo(-18, 0, -5, 0)
+        ..quadraticBezierTo(-18, 0, -35, 5)
+        ..close();
+      canvas.drawPath(exhaustPath, exhaustPaint);
+
+      // Outer glow around plane
+      final planeGlowPaint = Paint()
+        ..color = curveColor.withOpacity(0.4)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
+      canvas.drawCircle(Offset.zero, 16, planeGlowPaint);
+
+      canvas.restore();
+
+      // Draw airplane emoji at the tip
+      final planeTp = TextPainter(
+        text: TextSpan(
+          text: '✈',
+          style: TextStyle(
+            fontSize: 26,
+            color: Colors.white,
+            shadows: [
+              Shadow(color: curveColor, blurRadius: 12),
+              Shadow(color: curveColor.withAlpha(120), blurRadius: 24),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      // Position and rotate the plane to match trajectory
+      canvas.save();
+      canvas.translate(lastPt.dx, lastPt.dy);
+      canvas.rotate(angle + math.pi / 4); // Adjust for emoji orientation
+      planeTp.paint(canvas, Offset(-planeTp.width / 2, -planeTp.height / 2));
+      canvas.restore();
     }
 
     // Draw cashout line if cashed out
@@ -287,10 +339,15 @@ class _CrashGraphPainter extends CustomPainter {
       text = '${currentMultiplier.toStringAsFixed(2)}x';
       textColor = AppTheme.lossRed;
       fontSize = 48;
-    } else if (phase == GamePhase.cashedOut && cashoutMultiplier != null) {
-      text = '${cashoutMultiplier!.toStringAsFixed(2)}x';
-      textColor = AppTheme.winGreen;
-      fontSize = 48;
+    } else if (phase == GamePhase.cashedOut) {
+      // When cashed out, still show the LIVE multiplier so the graph isn't blocked
+      text = '${currentMultiplier.toStringAsFixed(2)}x';
+      textColor = currentMultiplier < 2.0
+          ? AppTheme.winGreen
+          : currentMultiplier < 5.0
+              ? AppTheme.multiplierYellow
+              : AppTheme.lossRed;
+      fontSize = 56;
     } else if (phase == GamePhase.running) {
       text = '${currentMultiplier.toStringAsFixed(2)}x';
       textColor = currentMultiplier < 2.0
@@ -313,7 +370,7 @@ class _CrashGraphPainter extends CustomPainter {
       text: TextSpan(
         text: text,
         style: TextStyle(
-          fontFamily: 'JetBrains Mono',
+          fontFamily: 'Outfit',
           fontSize: fontSize,
           fontWeight: FontWeight.w800,
           color: textColor,
@@ -336,18 +393,11 @@ class _CrashGraphPainter extends CustomPainter {
       ),
     );
 
-    // Status text below multiplier
-    String? statusText;
+    // Status text below multiplier — only for CRASHED (not cashedOut, since that uses a badge now)
     if (phase == GamePhase.crashed) {
-      statusText = 'CRASHED';
-    } else if (phase == GamePhase.cashedOut) {
-      statusText = 'CASHED OUT';
-    }
-
-    if (statusText != null) {
       final statusTp = TextPainter(
         text: TextSpan(
-          text: statusText,
+          text: 'CRASHED',
           style: TextStyle(
             fontFamily: 'Inter',
             fontSize: 16,
@@ -367,6 +417,54 @@ class _CrashGraphPainter extends CustomPainter {
         ),
       );
     }
+  }
+
+  /// Draws a compact cashout badge in the top-right corner instead of blocking the graph
+  void _drawCashoutBadge(Canvas canvas, Size size) {
+    final badgeText = '✓ Cashed Out @ ${cashoutMultiplier!.toStringAsFixed(2)}x';
+    String winText = '';
+    if (cashoutProfit != null && betAmount != null) {
+      final winAmount = (betAmount! + cashoutProfit!) / 100;
+      winText = ' — Won ৳${winAmount.toStringAsFixed(2)}';
+    }
+
+    final fullText = '$badgeText$winText';
+
+    final tp = TextPainter(
+      text: TextSpan(
+        text: fullText,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.winGreen,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final badgeWidth = tp.width + 20;
+    final badgeHeight = tp.height + 12;
+    final badgeX = size.width - badgeWidth - 16;
+    const badgeY = 28.0;
+
+    // Badge background
+    final bgRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(badgeX, badgeY, badgeWidth, badgeHeight),
+      const Radius.circular(8),
+    );
+
+    final bgPaint = Paint()
+      ..color = AppTheme.winGreen.withOpacity(0.15);
+    canvas.drawRRect(bgRect, bgPaint);
+
+    final borderPaint = Paint()
+      ..color = AppTheme.winGreen.withOpacity(0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawRRect(bgRect, borderPaint);
+
+    tp.paint(canvas, Offset(badgeX + 10, badgeY + 6));
   }
 
   List<double> _calculateGridSteps(double min, double max, int targetSteps) {

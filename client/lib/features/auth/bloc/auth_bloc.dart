@@ -2,6 +2,7 @@
 // Auth BLoC — Authentication State Management
 // ============================================
 
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:crash_game/features/auth/models/user_model.dart';
@@ -167,12 +168,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   String _extractErrorMessage(dynamic e) {
-    try {
-      if (e is Exception && e.toString().contains('DioException')) {
-        final dioError = e as dynamic;
-        return dioError.response?.data?['error'] ?? 'Network error occurred';
+    if (e is DioException) {
+      // Try to extract server error message
+      final data = e.response?.data;
+      if (data is Map) {
+        final msg = data['error'];
+        if (msg is String && msg.isNotEmpty) return msg;
       }
-    } catch (_) {}
-    return 'An unexpected error occurred';
+      // Handle connection-level errors
+      switch (e.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          return 'Connection timed out. Please try again.';
+        case DioExceptionType.connectionError:
+          return 'Cannot connect to server. Please check your connection.';
+        default:
+          return e.message ?? 'Network error occurred';
+      }
+    }
+    return e.toString();
   }
 }

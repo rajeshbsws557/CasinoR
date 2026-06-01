@@ -36,8 +36,8 @@ class WsMessage {
     );
   }
 
-  factory WsMessage.cashout() {
-    return WsMessage(type: 'CASHOUT', data: {});
+  factory WsMessage.cashout(String betId) {
+    return WsMessage(type: 'CASHOUT', data: {'betId': betId});
   }
 
   factory WsMessage.chat(String message) {

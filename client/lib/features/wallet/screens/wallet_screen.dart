@@ -7,6 +7,8 @@ import 'package:crash_game/features/auth/bloc/auth_bloc.dart';
 import 'package:crash_game/features/wallet/screens/deposit_screen.dart';
 import 'package:crash_game/features/wallet/screens/withdraw_screen.dart';
 import 'package:crash_game/features/wallet/repositories/wallet_repository.dart';
+import 'package:crash_game/features/game/widgets/animated_space_background.dart';
+import 'package:crash_game/core/widgets/glass_container.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -59,8 +61,9 @@ class _WalletScreenState extends State<WalletScreen> {
           ),
         ),
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
+      body: AnimatedSpaceBackground(
+        child: SafeArea(
+          child: RefreshIndicator(
           onRefresh: _loadTransactions,
           color: AppTheme.accentPurple,
           child: ListView(
@@ -82,6 +85,7 @@ class _WalletScreenState extends State<WalletScreen> {
               _buildTransactionsList(),
             ],
           ),
+          ),
         ),
       ),
     );
@@ -94,19 +98,18 @@ class _WalletScreenState extends State<WalletScreen> {
             ? state.user.formattedBalance
             : '৳0.00';
 
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: AppTheme.accentGradient,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.accentPurple.withAlpha(50),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
+        return GlassContainer(
+          padding: const EdgeInsets.all(28),
+          borderRadius: BorderRadius.circular(24),
+          color: AppTheme.accentPurple.withOpacity(0.1),
+          border: Border.all(color: AppTheme.accentPurple.withOpacity(0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.accentPurple.withOpacity(0.15),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
           child: Column(
             children: [
               Row(
@@ -138,7 +141,7 @@ class _WalletScreenState extends State<WalletScreen> {
               Text(
                 'Bangladeshi Taka',
                 style: GoogleFonts.inter(
-                  color: Colors.white.withAlpha(140),
+                  color: Colors.white.withOpacity(0.6),
                   fontSize: 12,
                 ),
               ),
@@ -196,23 +199,23 @@ class _WalletScreenState extends State<WalletScreen> {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withAlpha(60), width: 1),
-          ),
+        borderRadius: BorderRadius.circular(16),
+        child: GlassContainer(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.4), width: 1.5),
+          color: color.withOpacity(0.1),
           child: Column(
             children: [
               Icon(icon, color: color, size: 28),
               const SizedBox(height: 6),
               Text(
                 label,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.outfit(
                   color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.0,
+                  fontSize: 14,
                 ),
               ),
             ],
@@ -295,25 +298,18 @@ class _WalletScreenState extends State<WalletScreen> {
         label = type;
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withAlpha(10),
-          width: 1,
-        ),
-      ),
+    return GlassContainer(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      borderRadius: BorderRadius.circular(16),
       child: Row(
         children: [
           Container(
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: color.withAlpha(25),
-              borderRadius: BorderRadius.circular(10),
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 18),
           ),

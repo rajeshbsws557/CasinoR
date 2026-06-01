@@ -7,23 +7,25 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // ─── Color Palette ───
-  static const Color background = Color(0xFF0A0E17);
-  static const Color surface = Color(0xFF131A2A);
-  static const Color card = Color(0xFF1A2236);
-  static const Color cardLight = Color(0xFF222D45);
-  static const Color border = Color(0xFF2A3550);
+  // Deep, space-like backgrounds with a hint of blue/purple
+  static const Color background = Color(0xFF070B14);
+  static const Color surface = Color(0xFF0F1626);
+  static const Color card = Color(0xFF161E33);
+  static const Color cardLight = Color(0xFF1F2B47);
+  static const Color border = Color(0xFF283659);
 
-  // Accent colors
-  static const Color winGreen = Color(0xFF00E676);
-  static const Color lossRed = Color(0xFFFF1744);
-  static const Color multiplierYellow = Color(0xFFFFEA00);
-  static const Color accentPurple = Color(0xFF7C4DFF);
-  static const Color accentBlue = Color(0xFF448AFF);
+  // Vibrant, glowing accent colors
+  static const Color winGreen = Color(0xFF00FF87);
+  static const Color lossRed = Color(0xFFFF2A55);
+  static const Color multiplierYellow = Color(0xFFFFD500);
+  static const Color accentPurple = Color(0xFF8F00FF);
+  static const Color accentBlue = Color(0xFF00BFFF);
+  static const Color accentPink = Color(0xFFFF007F);
 
   // Text colors
-  static const Color textPrimary = Color(0xFFF5F5F5);
-  static const Color textSecondary = Color(0xFF8A95B0);
-  static const Color textMuted = Color(0xFF5A6580);
+  static const Color textPrimary = Color(0xFFFFFFFF);
+  static const Color textSecondary = Color(0xFFA5B4CB);
+  static const Color textMuted = Color(0xFF677693);
 
   // Gradient
   static const LinearGradient accentGradient = LinearGradient(
@@ -51,20 +53,20 @@ class AppTheme {
         onSurface: textPrimary,
       ),
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
-        displayLarge: GoogleFonts.inter(
-          fontSize: 48,
-          fontWeight: FontWeight.w800,
+        displayLarge: GoogleFonts.outfit(
+          fontSize: 52,
+          fontWeight: FontWeight.w900,
           color: textPrimary,
           letterSpacing: -1.5,
         ),
-        headlineMedium: GoogleFonts.inter(
-          fontSize: 28,
-          fontWeight: FontWeight.w700,
+        headlineMedium: GoogleFonts.outfit(
+          fontSize: 30,
+          fontWeight: FontWeight.w800,
           color: textPrimary,
         ),
-        titleLarge: GoogleFonts.inter(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
+        titleLarge: GoogleFonts.outfit(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
           color: textPrimary,
         ),
         titleMedium: GoogleFonts.inter(
@@ -84,64 +86,69 @@ class AppTheme {
         ),
         labelLarge: GoogleFonts.jetBrainsMono(
           fontSize: 14,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: textPrimary,
+          letterSpacing: 0.5,
         ),
       ),
       cardTheme: CardThemeData(
         color: card,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: border, width: 1),
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: Colors.white.withOpacity(0.05), width: 1),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: accentPurple,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
           textStyle: GoogleFonts.inter(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
           ),
+          elevation: 8,
+          shadowColor: accentPurple.withOpacity(0.5),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surface,
+        fillColor: surface.withOpacity(0.5),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: border),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: border),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: accentPurple, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: lossRed),
         ),
         labelStyle: GoogleFonts.inter(color: textSecondary),
         hintStyle: GoogleFonts.inter(color: textMuted),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: background,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.inter(
-          fontSize: 20,
+        titleTextStyle: GoogleFonts.outfit(
+          fontSize: 22,
           fontWeight: FontWeight.w700,
           color: textPrimary,
+          letterSpacing: 0.5,
         ),
       ),
     );

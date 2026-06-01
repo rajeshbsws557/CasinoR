@@ -121,7 +121,7 @@ export class WsHandler {
       // Confirm bet
       ws.send(JSON.stringify({
         type: 'BET_CONFIRMED',
-        data: { amount, auto_cashout: auto_cashout || null },
+        data: { betId: result.betId, amount, auto_cashout: auto_cashout || null },
       }));
 
       // Send balance update after bet placement
@@ -141,13 +141,23 @@ export class WsHandler {
     }
   }
 
-  private async handleCashout(ws: AuthenticatedWebSocket, _message: WsMessage): Promise<void> {
+  private async handleCashout(ws: AuthenticatedWebSocket, message: WsMessage): Promise<void> {
     try {
-      const result = await this.betManager.cashout(ws.userId);
+      const { betId } = message.data || {};
+      if (!betId || typeof betId !== 'string') {
+        ws.send(JSON.stringify({
+          type: 'CASHOUT_ERROR',
+          data: { message: 'Missing betId for cashout' },
+        }));
+        return;
+      }
+
+      const result = await this.betManager.cashout(ws.userId, betId);
 
       ws.send(JSON.stringify({
         type: 'CASHOUT_CONFIRMED',
         data: {
+          betId,
           multiplier: result.cashoutMultiplier,
           profit: result.profit,
           payout: result.amount + result.profit,

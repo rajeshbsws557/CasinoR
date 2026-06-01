@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:crash_game/config/theme.dart';
 import 'package:crash_game/features/game/screens/game_screen.dart';
 import 'package:crash_game/features/wallet/screens/wallet_screen.dart';
-import 'package:crash_game/features/fairness/screens/verify_screen.dart';
+import 'package:crash_game/features/profile/screens/profile_screen.dart';
 import 'package:crash_game/features/auth/bloc/auth_bloc.dart';
 import 'package:crash_game/features/game/bloc/game_bloc.dart';
 
@@ -20,7 +20,7 @@ class _MainNavigationState extends State<MainNavigation> {
   final List<Widget> _screens = [
     const GameScreen(),
     const WalletScreen(),
-    const VerifyScreen(),
+    const ProfileScreen(),
   ];
 
   @override
@@ -28,13 +28,15 @@ class _MainNavigationState extends State<MainNavigation> {
     super.initState();
     // Wire up GameBloc → AuthBloc balance updates
     // This ensures real-time balance sync from WebSocket messages
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final gameBloc = context.read<GameBloc>();
-      final authBloc = context.read<AuthBloc>();
-      gameBloc.onBalanceUpdate = (newBalance) {
-        authBloc.add(AuthBalanceUpdated(newBalance));
-      };
-    });
+    _wireBalanceUpdates();
+  }
+
+  void _wireBalanceUpdates() {
+    final gameBloc = context.read<GameBloc>();
+    final authBloc = context.read<AuthBloc>();
+    gameBloc.onBalanceUpdate = (newBalance) {
+      authBloc.add(AuthBalanceUpdated(newBalance));
+    };
   }
 
   @override
@@ -66,9 +68,9 @@ class _MainNavigationState extends State<MainNavigation> {
             label: 'Wallet',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.verified_outlined),
-            activeIcon: Icon(Icons.verified),
-            label: 'Fairness',
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
       ),

@@ -403,3 +403,195 @@ export async function rejectWithdrawal(req: Request, res: Response): Promise<voi
     res.status(500).json({ success: false, error: 'Failed to reject withdrawal' });
   }
 }
+
+// ─── Dashboard & User Management ───
+
+/**
+ * GET /api/admin/stats
+ * Retrieves dashboard overview statistics
+ */
+export async function getDashboardStats(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const [
+      totalUsers,
+      totalDepositsAgg,
+      totalWithdrawalsAgg,
+      pendingDeposits,
+      pendingWithdrawals
+    ] = await Promise.all([
+      db.collection('users').countDocuments(),
+      db.collection('deposits').aggregate([
+        { $match: { status: 'approved' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]).toArray(),
+      db.collection('withdrawals').aggregate([
+        { $match: { status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]).toArray(),
+      db.collection('deposits').countDocuments({ status: 'pending' }),
+      db.collection('withdrawals').countDocuments({ status: 'pending' })
+    ]);
+
+    const totalDeposits = totalDepositsAgg[0]?.total || 0;
+    const totalWithdrawals = totalWithdrawalsAgg[0]?.total || 0;
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        totalDeposits,
+        totalWithdrawals,
+        pendingDeposits,
+        pendingWithdrawals,
+        formattedTotalDeposits: `৳${(totalDeposits / 100).toFixed(2)}`,
+        formattedTotalWithdrawals: `৳${(totalWithdrawals / 100).toFixed(2)}`,
+      }
+    });
+  } catch (error) {
+    console.error('[AdminController] getDashboardStats error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get dashboard stats' });
+  }
+}
+
+/**
+ * GET /api/admin/users
+ * Retrieves a list of all users
+ */
+export async function getUsers(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const skip = (page - 1) * limit;
+    
+    // Optional search by username or email
+    const search = req.query.search as string;
+    const query: any = {};
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      db.collection('users')
+        .find(query)
+        .project({ password: 0 }) // Exclude password hashes
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      db.collection('users').countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        users: users.map(u => ({
+          id: u._id.toString(),
+          username: u.username,
+          email: u.email,
+          balance: u.balance,
+          formattedBalance: `৳${(u.balance / 100).toFixed(2)}`,
+          createdAt: u.created_at,
+          updatedAt: u.updated_at,
+        })),
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      }
+    });
+  } catch (error) {
+    console.error('[AdminController] getUsers error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get users' });
+  }
+}
+
+/**
+ * POST /api/admin/users/:id/balance
+ * Manually updates a user's balance
+ */
+export async function updateUserBalance(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.params.id;
+    const { amount, reason } = req.body;
+
+    if (!ObjectId.isValid(userId)) {
+      res.status(400).json({ success: false, error: 'Invalid user ID' });
+      return;
+    }
+    
+    if (typeof amount !== 'number') {
+      res.status(400).json({ success: false, error: 'Amount must be a number (paisa)' });
+      return;
+    }
+
+    const db = getDb();
+    const mongoClient = getClient();
+    const session = mongoClient.startSession();
+
+    try {
+      let result: any = null;
+
+      await session.withTransaction(async () => {
+        // Find and update user
+        const userResult = await db.collection('users').findOneAndUpdate(
+          { _id: new ObjectId(userId) },
+          {
+            $inc: { balance: amount },
+            $set: { updated_at: new Date() },
+          },
+          { returnDocument: 'after', session }
+        );
+
+        if (!userResult) {
+          throw new Error('User not found');
+        }
+
+        if (userResult.balance < 0) {
+           throw new Error('Balance cannot be negative');
+        }
+
+        // Record transaction
+        await db.collection('transactions').insertOne({
+          user_id: userResult._id,
+          type: amount >= 0 ? 'admin_credit' : 'admin_debit',
+          amount: Math.abs(amount),
+          balance_after: userResult.balance,
+          reference_id: `admin_adj_${new ObjectId().toString()}`,
+          metadata: { reason: reason || 'Manual admin adjustment' },
+          created_at: new Date(),
+        }, { session });
+
+        result = {
+          userId: userResult._id.toString(),
+          adjustment: amount,
+          newBalance: userResult.balance,
+        };
+      });
+
+      console.log(`[Admin] Balance adjusted: user=${userId} change=৳${(result.adjustment / 100).toFixed(2)} reason="${reason}"`);
+
+      res.json({
+        success: true,
+        data: {
+          ...result,
+          formattedAdjustment: `${result.adjustment >= 0 ? '+' : '-'}৳${(Math.abs(result.adjustment) / 100).toFixed(2)}`,
+          formattedBalance: `৳${(result.newBalance / 100).toFixed(2)}`,
+          message: 'User balance updated successfully',
+        },
+      });
+    } catch (error) {
+      if ((error as Error).message === 'User not found' || (error as Error).message === 'Balance cannot be negative') {
+        res.status(400).json({ success: false, error: (error as Error).message });
+      } else {
+        throw error;
+      }
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    console.error('[AdminController] updateUserBalance error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update user balance' });
+  }
+}

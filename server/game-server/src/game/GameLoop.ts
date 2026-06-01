@@ -249,6 +249,7 @@ export class GameLoop {
           this.sendToUser(cashout.userId, {
             type: 'CASHOUT_CONFIRMED',
             data: {
+              betId: cashout.betId,
               multiplier: cashout.cashoutMultiplier,
               profit: cashout.profit,
               payout: cashout.amount + cashout.profit,

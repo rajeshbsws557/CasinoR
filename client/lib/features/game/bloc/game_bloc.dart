@@ -45,7 +45,46 @@ class GamePlaceBet extends GameEvent {
   GamePlaceBet({required this.amount, this.autoCashout, this.clientSeed});
 }
 
-class GameCashout extends GameEvent {}
+class GameCashout extends GameEvent {
+  final String betId;
+  GameCashout(this.betId);
+}
+
+class MyBetState extends Equatable {
+  final String betId;
+  final int amount;
+  final double? autoCashout;
+  final bool isCashedOut;
+  final double? cashoutMultiplier;
+  final int? cashoutProfit;
+
+  const MyBetState({
+    required this.betId,
+    required this.amount,
+    this.autoCashout,
+    this.isCashedOut = false,
+    this.cashoutMultiplier,
+    this.cashoutProfit,
+  });
+
+  MyBetState copyWith({
+    bool? isCashedOut,
+    double? cashoutMultiplier,
+    int? cashoutProfit,
+  }) {
+    return MyBetState(
+      betId: betId,
+      amount: amount,
+      autoCashout: autoCashout,
+      isCashedOut: isCashedOut ?? this.isCashedOut,
+      cashoutMultiplier: cashoutMultiplier ?? this.cashoutMultiplier,
+      cashoutProfit: cashoutProfit ?? this.cashoutProfit,
+    );
+  }
+
+  @override
+  List<Object?> get props => [betId, amount, isCashedOut, cashoutMultiplier, cashoutProfit];
+}
 
 // ─── State ───
 
@@ -59,8 +98,7 @@ class GameState extends Equatable {
   final int countdownMs;
   final List<double> multiplierHistory;
   final List<Map<String, dynamic>> activeBets;
-  final double? cashoutMultiplier;
-  final int? cashoutProfit;
+  final List<MyBetState> myBets;
   final List<double> recentCrashPoints;
   final String? errorMessage;
 
@@ -74,8 +112,7 @@ class GameState extends Equatable {
     this.countdownMs = 0,
     this.multiplierHistory = const [],
     this.activeBets = const [],
-    this.cashoutMultiplier,
-    this.cashoutProfit,
+    this.myBets = const [],
     this.recentCrashPoints = const [],
     this.errorMessage,
   });
@@ -90,8 +127,7 @@ class GameState extends Equatable {
     int? countdownMs,
     List<double>? multiplierHistory,
     List<Map<String, dynamic>>? activeBets,
-    double? cashoutMultiplier,
-    int? cashoutProfit,
+    List<MyBetState>? myBets,
     List<double>? recentCrashPoints,
     String? errorMessage,
   }) {
@@ -105,8 +141,7 @@ class GameState extends Equatable {
       countdownMs: countdownMs ?? this.countdownMs,
       multiplierHistory: multiplierHistory ?? this.multiplierHistory,
       activeBets: activeBets ?? this.activeBets,
-      cashoutMultiplier: cashoutMultiplier ?? this.cashoutMultiplier,
-      cashoutProfit: cashoutProfit ?? this.cashoutProfit,
+      myBets: myBets ?? this.myBets,
       recentCrashPoints: recentCrashPoints ?? this.recentCrashPoints,
       errorMessage: errorMessage,
     );
@@ -115,7 +150,7 @@ class GameState extends Equatable {
   @override
   List<Object?> get props => [
     phase, roundId, currentMultiplier, elapsedMs,
-    crashPoint, countdownMs, cashoutMultiplier,
+    crashPoint, countdownMs, myBets,
     multiplierHistory.length, activeBets.length,
     recentCrashPoints.length, errorMessage,
   ];
@@ -195,8 +230,7 @@ class GameBloc extends Bloc<GameEvent, GameState> {
           crashPoint: 0,
           multiplierHistory: [],
           activeBets: [],
-          cashoutMultiplier: null,
-          cashoutProfit: null,
+          myBets: [],
           errorMessage: null,
         ));
         break;
@@ -239,7 +273,18 @@ class GameBloc extends Bloc<GameEvent, GameState> {
         break;
 
       case 'BET_CONFIRMED':
-        // Bet was accepted — handled by UI
+        final betId = msg.data['betId'] as String?;
+        final amount = (msg.data['amount'] as num?)?.toInt() ?? 0;
+        final autoCashout = (msg.data['auto_cashout'] as num?)?.toDouble();
+        
+        if (betId != null) {
+          final newBet = MyBetState(
+            betId: betId,
+            amount: amount,
+            autoCashout: autoCashout,
+          );
+          emit(state.copyWith(myBets: [...state.myBets, newBet]));
+        }
         break;
 
       case 'BET_ERROR':
@@ -249,14 +294,38 @@ class GameBloc extends Bloc<GameEvent, GameState> {
         break;
 
       case 'CASHOUT_CONFIRMED':
-        final multiplier = (msg.data['multiplier'] as num).toDouble();
-        final profit = (msg.data['profit'] as num).toInt();
+        final betId = msg.data['betId'] as String?;
+        final multiplier = (msg.data['multiplier'] as num?)?.toDouble() ?? 0;
+        final profit = (msg.data['profit'] as num?)?.toInt() ?? 0;
 
-        emit(state.copyWith(
-          phase: GamePhase.cashedOut,
-          cashoutMultiplier: multiplier,
-          cashoutProfit: profit,
-        ));
+        // Fallback: if betId is null (e.g., auto-cashout from older server code), match the first active bet
+        String? targetBetId = betId;
+        if (targetBetId == null) {
+          final uncashed = state.myBets.where((b) => !b.isCashedOut).toList();
+          if (uncashed.isNotEmpty) {
+            targetBetId = uncashed.first.betId;
+          }
+        }
+
+        if (targetBetId != null) {
+          final updatedBets = state.myBets.map((b) {
+            if (b.betId == targetBetId) {
+              return b.copyWith(
+                isCashedOut: true,
+                cashoutMultiplier: multiplier,
+                cashoutProfit: profit,
+              );
+            }
+            return b;
+          }).toList();
+
+          final allCashedOut = updatedBets.isNotEmpty && updatedBets.every((b) => b.isCashedOut);
+
+          emit(state.copyWith(
+            phase: allCashedOut ? GamePhase.cashedOut : state.phase,
+            myBets: updatedBets,
+          ));
+        }
         break;
 
       case 'CASHOUT_ERROR':
@@ -315,7 +384,9 @@ class GameBloc extends Bloc<GameEvent, GameState> {
   }
 
   void _onCashout(GameCashout event, Emitter<GameState> emit) {
-    _wsClient.send(WsMessage.cashout());
+    if (state.phase == GamePhase.running) {
+      _wsClient.send(WsMessage.cashout(event.betId));
+    }
   }
 
   @override

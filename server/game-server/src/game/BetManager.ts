@@ -38,7 +38,7 @@ export class BetManager {
     amount: number,
     autoCashout: number | null,
     clientSeed: string,
-  ): Promise<{ newBalance: number }> {
+  ): Promise<{ betId: string, newBalance: number }> {
     // Validate game phase
     if (this.gameState.getPhase() !== 'BETTING') {
       throw new Error('Bets can only be placed during the betting phase');
@@ -60,19 +60,23 @@ export class BetManager {
       throw new Error('Auto-cashout must be at least 1.01x');
     }
 
-    // Check for existing bet in this round
-    if (this.activeBets.has(userId)) {
-      throw new Error('You already have a bet in this round');
+    // Check for max bets in this round
+    let userBetCount = 0;
+    for (const bet of this.activeBets.values()) {
+      if (bet.userId === userId) userBetCount++;
+    }
+    if (userBetCount >= 2) {
+      throw new Error('You can only place up to 2 bets per round');
     }
 
-    // Rate limiting
+    // Rate limiting (500ms to allow quick double bets)
     const redis = getRedisClient();
     const rateLimitKey = `ratelimit:bet:${userId}`;
     const isLimited = await redis.get(rateLimitKey);
     if (isLimited) {
       throw new Error('Please wait before placing another bet');
     }
-    await redis.setex(rateLimitKey, 1, '1');
+    await redis.psetex(rateLimitKey, 500, '1');
 
     // Atomic MongoDB transaction: debit balance + record bet + ledger
     const db = getDb();
@@ -133,8 +137,11 @@ export class BetManager {
         );
       });
 
+      const betId = new ObjectId().toHexString();
+
       // Store in memory for fast access during the round
       const bet: ActiveBet = {
+        betId,
         userId,
         username,
         amount,
@@ -143,7 +150,7 @@ export class BetManager {
         placedAt: new Date(),
       };
 
-      this.activeBets.set(userId, bet);
+      this.activeBets.set(betId, bet);
 
       // Register client seed with crypto service
       try {
@@ -163,7 +170,7 @@ export class BetManager {
 
       console.log(`[BetManager] Bet placed: ${username} → ৳${(amount / 100).toFixed(2)} (auto: ${autoCashout || 'none'}) | Balance: ৳${(newBalance / 100).toFixed(2)}`);
 
-      return { newBalance };
+      return { betId, newBalance };
     } finally {
       await session.endSession();
     }
@@ -173,14 +180,17 @@ export class BetManager {
    * Cashes out a user's bet at the current multiplier.
    * Returns full result including the user's new balance.
    */
-  async cashout(userId: string): Promise<CashoutResult> {
+  async cashout(userId: string, betId: string): Promise<CashoutResult> {
     if (this.gameState.getPhase() !== 'RUNNING') {
       throw new Error('Cashout only available during the running phase');
     }
 
-    const bet = this.activeBets.get(userId);
+    const bet = this.activeBets.get(betId);
     if (!bet) {
       throw new Error('No active bet found');
+    }
+    if (bet.userId !== userId) {
+      throw new Error('You do not own this bet');
     }
 
     const multiplier = this.gameState.getCurrentMultiplier();
@@ -255,8 +265,8 @@ export class BetManager {
         newBalance,
       };
 
-      this.activeBets.delete(userId);
-      this.cashedOutBets.set(userId, cashedOut);
+      this.activeBets.delete(betId);
+      this.cashedOutBets.set(betId, cashedOut);
 
       console.log(`[BetManager] Cashout: ${bet.username} @ ${multiplier.toFixed(2)}x → profit ৳${(profit / 100).toFixed(2)} | Balance: ৳${(newBalance / 100).toFixed(2)}`);
 
@@ -273,13 +283,13 @@ export class BetManager {
   async processAutoCashouts(currentMultiplier: number): Promise<CashoutResult[]> {
     const autoCashouts: CashoutResult[] = [];
 
-    for (const [userId, bet] of this.activeBets) {
+    for (const [betId, bet] of this.activeBets) {
       if (bet.autoCashout !== null && currentMultiplier >= bet.autoCashout) {
         try {
-          const result = await this.cashout(userId);
+          const result = await this.cashout(bet.userId, betId);
           autoCashouts.push(result);
         } catch (error) {
-          console.error(`[BetManager] Auto-cashout failed for ${userId}:`, (error as Error).message);
+          console.error(`[BetManager] Auto-cashout failed for ${bet.userId}:`, (error as Error).message);
         }
       }
     }
@@ -296,9 +306,9 @@ export class BetManager {
     const roundId = this.gameState.getRoundId();
     const lostBets: LostBetResult[] = [];
 
-    for (const [userId, bet] of this.activeBets) {
+    for (const [betId, bet] of this.activeBets) {
       try {
-        const userOid = new ObjectId(userId);
+        const userOid = new ObjectId(bet.userId);
 
         // Mark bet as lost
         await db.collection('bets').updateOne(
@@ -314,14 +324,14 @@ export class BetManager {
 
         if (user) {
           lostBets.push({
-            userId,
+            userId: bet.userId,
             username: bet.username,
             amount: bet.amount,
             currentBalance: user.balance,
           });
         }
       } catch (error) {
-        console.error(`[BetManager] Failed to process loss for ${userId}:`, (error as Error).message);
+        console.error(`[BetManager] Failed to process loss for ${bet.userId}:`, (error as Error).message);
       }
     }
 

@@ -16,6 +16,7 @@ export interface RoundState {
 }
 
 export interface ActiveBet {
+  betId: string;
   userId: string;
   username: string;
   amount: number;

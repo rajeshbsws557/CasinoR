@@ -59,6 +59,24 @@ class AuthRepository {
     }
   }
 
+  /// Updates the user's profile (currently: username only)
+  Future<UserModel> updateProfile({String? username}) async {
+    final response = await _api.dio.put('/auth/profile', data: {
+      if (username != null) 'username': username,
+    });
+    return UserModel.fromJson(response.data['data']);
+  }
+
+  /// Updates payment methods (bKash/Nagad phone numbers)
+  Future<List<PaymentMethod>> updatePaymentMethods(List<PaymentMethod> methods) async {
+    final response = await _api.dio.put('/auth/payment-methods', data: {
+      'payment_methods': methods.map((m) => m.toJson()).toList(),
+    });
+    return (response.data['data']['paymentMethods'] as List<dynamic>)
+        .map((m) => PaymentMethod.fromJson(m as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<void> logout() async {
     await _api.clearToken();
   }

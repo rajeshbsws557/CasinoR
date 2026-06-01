@@ -10,7 +10,9 @@ import 'package:crash_game/core/websocket/ws_client.dart';
 import 'package:crash_game/core/websocket/ws_message.dart';
 
 class ChatPanel extends StatefulWidget {
-  const ChatPanel({super.key});
+  final ScrollController? scrollController;
+
+  const ChatPanel({super.key, this.scrollController});
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -18,13 +20,14 @@ class ChatPanel extends StatefulWidget {
 
 class _ChatPanelState extends State<ChatPanel> {
   final _controller = TextEditingController();
-  final _scrollController = ScrollController();
+  late final ScrollController _scrollController;
   final _messages = <Map<String, dynamic>>[];
   StreamSubscription<WsMessage>? _subscription;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = widget.scrollController ?? ScrollController();
     _subscription = WsClient().messageStream
         .where((msg) => msg.type == 'CHAT' || msg.type == 'CHAT_HISTORY')
         .listen(_onChatMessage);
@@ -72,7 +75,9 @@ class _ChatPanelState extends State<ChatPanel> {
   void dispose() {
     _subscription?.cancel();
     _controller.dispose();
-    _scrollController.dispose();
+    if (widget.scrollController == null) {
+      _scrollController.dispose();
+    }
     super.dispose();
   }
 
