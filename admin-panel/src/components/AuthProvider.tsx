@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { api } from '@/lib/api';
 
 interface AuthContextType {
   isAdmin: boolean;
@@ -30,10 +31,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, [pathname, router]);
 
-  const login = (key: string) => {
+  const login = async (key: string) => {
     localStorage.setItem('admin_key', key);
-    setIsAdmin(true);
-    router.push('/');
+    try {
+      await api.getStats();
+      setIsAdmin(true);
+      router.push('/');
+    } catch (err: any) {
+      localStorage.removeItem('admin_key');
+      alert(err.message || 'Invalid API key');
+    }
   };
 
   const logout = () => {

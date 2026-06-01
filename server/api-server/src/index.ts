@@ -21,7 +21,7 @@ const app = express();
 // CORS configuration
 const corsOptions: cors.CorsOptions = {
   origin: config.cors.allowedOrigins === '*'
-    ? '*'
+    ? true
     : config.cors.allowedOrigins.split(',').map(o => o.trim()),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Key'],

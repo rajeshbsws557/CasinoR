@@ -21,7 +21,9 @@ async function handleResponse(response: Response) {
     if (response.status === 401 || response.status === 403) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('admin_key');
-        window.location.href = '/login';
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       }
     }
     throw new ApiError(response.status, data.error || 'API Request Failed');
