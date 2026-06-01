@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/admin';
+const API_URL = '/api/admin';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -40,12 +40,12 @@ export const api = {
 
   // Users
   getUsers: async (page = 1, limit = 50, search = '') => {
-    const url = new URL(`${API_URL}/users`);
-    url.searchParams.set('page', page.toString());
-    url.searchParams.set('limit', limit.toString());
-    if (search) url.searchParams.set('search', search);
+    const query = new URLSearchParams();
+    query.set('page', page.toString());
+    query.set('limit', limit.toString());
+    if (search) query.set('search', search);
     
-    const res = await fetch(url.toString(), { headers: getHeaders() });
+    const res = await fetch(`${API_URL}/users?${query.toString()}`, { headers: getHeaders() });
     return handleResponse(res);
   },
   updateUserBalance: async (userId: string, amount: number, reason: string) => {
@@ -59,10 +59,10 @@ export const api = {
 
   // Deposits
   getPendingDeposits: async (page = 1, limit = 50) => {
-    const url = new URL(`${API_URL}/deposits/pending`);
-    url.searchParams.set('page', page.toString());
-    url.searchParams.set('limit', limit.toString());
-    const res = await fetch(url.toString(), { headers: getHeaders() });
+    const query = new URLSearchParams();
+    query.set('page', page.toString());
+    query.set('limit', limit.toString());
+    const res = await fetch(`${API_URL}/deposits/pending?${query.toString()}`, { headers: getHeaders() });
     return handleResponse(res);
   },
   approveDeposit: async (id: string) => {
@@ -83,10 +83,10 @@ export const api = {
 
   // Withdrawals
   getPendingWithdrawals: async (page = 1, limit = 50) => {
-    const url = new URL(`${API_URL}/withdrawals/pending`);
-    url.searchParams.set('page', page.toString());
-    url.searchParams.set('limit', limit.toString());
-    const res = await fetch(url.toString(), { headers: getHeaders() });
+    const query = new URLSearchParams();
+    query.set('page', page.toString());
+    query.set('limit', limit.toString());
+    const res = await fetch(`${API_URL}/withdrawals/pending?${query.toString()}`, { headers: getHeaders() });
     return handleResponse(res);
   },
   completeWithdrawal: async (id: string) => {
