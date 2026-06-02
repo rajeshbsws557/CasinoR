@@ -53,10 +53,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // Logo / Title
                   ShaderMask(
-                    shaderCallback: (bounds) => AppTheme.accentGradient
-                        .createShader(bounds),
+                    shaderCallback: (bounds) =>
+                        AppTheme.accentGradient.createShader(bounds),
                     child: Text(
-                      '🚀 CRASH',
+                      '🚀 CasinoR',
                       style: GoogleFonts.inter(
                         fontSize: 42,
                         fontWeight: FontWeight.w900,
@@ -105,10 +105,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (_showRegister) ...[
                           TextField(
                             controller: _usernameController,
-                            style: GoogleFonts.inter(color: AppTheme.textPrimary),
+                            style: GoogleFonts.inter(
+                              color: AppTheme.textPrimary,
+                            ),
                             decoration: const InputDecoration(
                               labelText: 'Username',
-                              prefixIcon: Icon(Icons.person_outline, color: AppTheme.textMuted),
+                              prefixIcon: Icon(
+                                Icons.person_outline,
+                                color: AppTheme.textMuted,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -120,7 +125,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: GoogleFonts.inter(color: AppTheme.textPrimary),
                           decoration: const InputDecoration(
                             labelText: 'Email',
-                            prefixIcon: Icon(Icons.email_outlined, color: AppTheme.textMuted),
+                            prefixIcon: Icon(
+                              Icons.email_outlined,
+                              color: AppTheme.textMuted,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -131,7 +139,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: GoogleFonts.inter(color: AppTheme.textPrimary),
                           decoration: const InputDecoration(
                             labelText: 'Password',
-                            prefixIcon: Icon(Icons.lock_outline, color: AppTheme.textMuted),
+                            prefixIcon: Icon(
+                              Icons.lock_outline,
+                              color: AppTheme.textMuted,
+                            ),
                           ),
                           onSubmitted: (_) => _submit(),
                         ),
@@ -150,7 +161,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppTheme.accentPurple.withAlpha(80),
+                                      color: AppTheme.accentPurple.withAlpha(
+                                        80,
+                                      ),
                                       blurRadius: 16,
                                       offset: const Offset(0, 4),
                                     ),
@@ -167,7 +180,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   child: isLoading
                                       ? const SizedBox(
-                                          width: 20, height: 20,
+                                          width: 20,
+                                          height: 20,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                             color: Colors.white,
@@ -218,16 +232,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _submit() {
     if (_showRegister) {
-      context.read<AuthBloc>().add(AuthRegisterRequested(
-        username: _usernameController.text.trim(),
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      ));
+      context.read<AuthBloc>().add(
+        AuthRegisterRequested(
+          username: _usernameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        ),
+      );
     } else {
-      context.read<AuthBloc>().add(AuthLoginRequested(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      ));
+      context.read<AuthBloc>().add(
+        AuthLoginRequested(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        ),
+      );
     }
   }
 }

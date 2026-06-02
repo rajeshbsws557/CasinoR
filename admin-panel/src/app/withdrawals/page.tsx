@@ -29,7 +29,11 @@ export default function WithdrawalsPage() {
   };
 
   useEffect(() => {
-    if (isAdmin) loadWithdrawals();
+    if (isAdmin) {
+      loadWithdrawals();
+      const interval = setInterval(loadWithdrawals, 5000);
+      return () => clearInterval(interval);
+    }
   }, [isAdmin]);
 
   const handleComplete = async (id: string) => {

@@ -266,6 +266,16 @@ export class GameLoop {
             },
           });
         }
+
+        // Broadcast updated bets list for leaderboard after cashouts
+        if (autoCashouts.length > 0) {
+          this.broadcast({
+            type: 'PLAYERS_UPDATE',
+            data: {
+              bets: this.betManager.getAllBetsForDisplay(),
+            },
+          });
+        }
       }, config.game.tickIntervalMs);
     });
   }

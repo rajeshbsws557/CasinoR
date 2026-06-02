@@ -25,10 +25,16 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isAdmin) return;
     
-    api.getStats()
-      .then(setStats)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    const loadData = () => {
+      api.getStats()
+        .then(setStats)
+        .catch((err) => setError(err.message))
+        .finally(() => setLoading(false));
+    };
+
+    loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, [isAdmin]);
 
   if (!isAdmin) return null;

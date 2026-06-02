@@ -98,8 +98,11 @@ class GameState extends Equatable {
   final int countdownMs;
   final List<double> multiplierHistory;
   final List<Map<String, dynamic>> activeBets;
+  final List<Map<String, dynamic>> previousRoundBets;
+  final List<Map<String, dynamic>> topWins;
   final List<MyBetState> myBets;
   final List<double> recentCrashPoints;
+  final int onlinePlayerCount;
   final String? errorMessage;
 
   const GameState({
@@ -112,8 +115,11 @@ class GameState extends Equatable {
     this.countdownMs = 0,
     this.multiplierHistory = const [],
     this.activeBets = const [],
+    this.previousRoundBets = const [],
+    this.topWins = const [],
     this.myBets = const [],
     this.recentCrashPoints = const [],
+    this.onlinePlayerCount = 0,
     this.errorMessage,
   });
 
@@ -127,8 +133,11 @@ class GameState extends Equatable {
     int? countdownMs,
     List<double>? multiplierHistory,
     List<Map<String, dynamic>>? activeBets,
+    List<Map<String, dynamic>>? previousRoundBets,
+    List<Map<String, dynamic>>? topWins,
     List<MyBetState>? myBets,
     List<double>? recentCrashPoints,
+    int? onlinePlayerCount,
     String? errorMessage,
   }) {
     return GameState(
@@ -141,8 +150,11 @@ class GameState extends Equatable {
       countdownMs: countdownMs ?? this.countdownMs,
       multiplierHistory: multiplierHistory ?? this.multiplierHistory,
       activeBets: activeBets ?? this.activeBets,
+      previousRoundBets: previousRoundBets ?? this.previousRoundBets,
+      topWins: topWins ?? this.topWins,
       myBets: myBets ?? this.myBets,
       recentCrashPoints: recentCrashPoints ?? this.recentCrashPoints,
+      onlinePlayerCount: onlinePlayerCount ?? this.onlinePlayerCount,
       errorMessage: errorMessage,
     );
   }
@@ -152,7 +164,8 @@ class GameState extends Equatable {
     phase, roundId, currentMultiplier, elapsedMs,
     crashPoint, countdownMs, myBets,
     multiplierHistory.length, activeBets.length,
-    recentCrashPoints.length, errorMessage,
+    previousRoundBets.length, topWins.length,
+    recentCrashPoints.length, onlinePlayerCount, errorMessage,
   ];
 }
 
@@ -220,6 +233,10 @@ class GameBloc extends Bloc<GameEvent, GameState> {
 
     switch (msg.type) {
       case 'ROUND_START':
+        // Save current round's bets as previous round data before resetting
+        final prevBets = state.activeBets.isNotEmpty
+            ? List<Map<String, dynamic>>.from(state.activeBets)
+            : state.previousRoundBets;
         emit(state.copyWith(
           phase: GamePhase.betting,
           roundId: msg.data['round_id'] ?? '',
@@ -230,6 +247,7 @@ class GameBloc extends Bloc<GameEvent, GameState> {
           crashPoint: 0,
           multiplierHistory: [],
           activeBets: [],
+          previousRoundBets: prevBets,
           myBets: [],
           errorMessage: null,
         ));
@@ -338,9 +356,42 @@ class GameBloc extends Bloc<GameEvent, GameState> {
       case 'PLAYER_CASHOUT':
         // Refresh active bets list
         final bets = msg.data['bets'] as List<dynamic>?;
+        final playerCount = (msg.data['playerCount'] as num?)?.toInt();
         if (bets != null) {
+          final betsList = bets.cast<Map<String, dynamic>>();
+          // Update top wins: track highest individual wins across the session
+          final newTopWins = List<Map<String, dynamic>>.from(state.topWins);
+          for (final bet in betsList) {
+            if (bet['status'] == 'cashed_out' && bet['profit'] != null) {
+              final winAmount = (bet['amount'] as num).toInt() + (bet['profit'] as num).toInt();
+              final entry = {
+                'username': bet['username'],
+                'amount': bet['amount'],
+                'cashoutMultiplier': bet['cashoutMultiplier'],
+                'profit': bet['profit'],
+                'winAmount': winAmount,
+              };
+              // Add if not already tracked (simple dedup by username+amount combo)
+              final isDuplicate = newTopWins.any((t) =>
+                t['username'] == bet['username'] &&
+                t['amount'] == bet['amount'] &&
+                t['cashoutMultiplier'] == bet['cashoutMultiplier']);
+              if (!isDuplicate) {
+                newTopWins.add(entry);
+              }
+            }
+          }
+          // Sort by win amount descending, keep top 20
+          newTopWins.sort((a, b) =>
+            ((b['winAmount'] as num?) ?? 0).compareTo((a['winAmount'] as num?) ?? 0));
+          if (newTopWins.length > 20) {
+            newTopWins.removeRange(20, newTopWins.length);
+          }
+
           emit(state.copyWith(
-            activeBets: bets.cast<Map<String, dynamic>>(),
+            activeBets: betsList,
+            topWins: newTopWins,
+            onlinePlayerCount: playerCount ?? state.onlinePlayerCount,
           ));
         }
         break;

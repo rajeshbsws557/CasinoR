@@ -29,7 +29,11 @@ export default function DepositsPage() {
   };
 
   useEffect(() => {
-    if (isAdmin) loadDeposits();
+    if (isAdmin) {
+      loadDeposits();
+      const interval = setInterval(loadDeposits, 5000);
+      return () => clearInterval(interval);
+    }
   }, [isAdmin]);
 
   const handleApprove = async (id: string) => {

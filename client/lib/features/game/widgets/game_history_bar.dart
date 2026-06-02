@@ -1,5 +1,5 @@
 // ============================================
-// Game History Bar — Recent Crash Points (Expandable)
+// Game History Bar — Aviator-Style Scrollable Multipliers
 // ============================================
 
 import 'package:flutter/material.dart';
@@ -15,101 +15,100 @@ class GameHistoryBar extends StatefulWidget {
   State<GameHistoryBar> createState() => _GameHistoryBarState();
 }
 
-class _GameHistoryBarState extends State<GameHistoryBar>
-    with SingleTickerProviderStateMixin {
+class _GameHistoryBarState extends State<GameHistoryBar> {
   bool _isExpanded = false;
+
+  Color _getMultiplierColor(double cp) {
+    if (cp >= 10.0) return AppTheme.winGreen;
+    if (cp >= 2.0) return AppTheme.accentPurple;
+    return AppTheme.textSecondary;
+  }
 
   @override
   Widget build(BuildContext context) {
     if (widget.crashPoints.isEmpty) {
-      return const SizedBox(height: 36);
+      return const SizedBox(height: 32);
     }
 
-    // Show the most recent items first
     final reversed = widget.crashPoints.reversed.toList();
-    final visibleItems = _isExpanded ? reversed : reversed.take(6).toList();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: GestureDetector(
-        onTap: () => setState(() => _isExpanded = !_isExpanded),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppTheme.surface.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.border.withOpacity(0.5)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header row with expand/collapse toggle
-              Row(
-                children: [
-                  Text(
-                    'History',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
-                  const Spacer(),
-                  AnimatedRotation(
-                    turns: _isExpanded ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Icon(
-                      Icons.expand_more,
-                      size: 16,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
-                ],
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: SizedBox(
+        height: 32,
+        child: Row(
+          children: [
+            // Scrollable multiplier values
+            Expanded(
+              child: _isExpanded
+                  ? _buildExpandedWrap(reversed)
+                  : _buildScrollableRow(reversed),
+            ),
+            // Overflow dots button
+            GestureDetector(
+              onTap: () => setState(() => _isExpanded = !_isExpanded),
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppTheme.surface.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.border.withOpacity(0.3)),
+                ),
+                child: Icon(
+                  _isExpanded ? Icons.close : Icons.more_horiz,
+                  size: 16,
+                  color: AppTheme.textMuted,
+                ),
               ),
-              const SizedBox(height: 4),
-              // Crash points as a Wrap (expands vertically)
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 250),
-                crossFadeState: _isExpanded
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                firstChild: _buildCrashPointsWrap(visibleItems),
-                secondChild: _buildCrashPointsWrap(visibleItems),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildCrashPointsWrap(List<double> items) {
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: items.map((cp) {
-        final isGreen = cp >= 2.0;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: (isGreen ? AppTheme.winGreen : AppTheme.lossRed).withAlpha(20),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: (isGreen ? AppTheme.winGreen : AppTheme.lossRed).withAlpha(60),
-            ),
-          ),
+  Widget _buildScrollableRow(List<double> items) {
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      reverse: false,
+      itemCount: items.length,
+      separatorBuilder: (_, _i) => const SizedBox(width: 10),
+      itemBuilder: (context, index) {
+        final cp = items[index];
+        return Center(
           child: Text(
             '${cp.toStringAsFixed(2)}x',
             style: GoogleFonts.jetBrainsMono(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: isGreen ? AppTheme.winGreen : AppTheme.lossRed,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _getMultiplierColor(cp),
             ),
           ),
         );
-      }).toList(),
+      },
+    );
+  }
+
+  Widget _buildExpandedWrap(List<double> items) {
+    // Show in a scrollable wrap when expanded (overlay-like)
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: items.map((cp) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Text(
+              '${cp.toStringAsFixed(2)}x',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _getMultiplierColor(cp),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

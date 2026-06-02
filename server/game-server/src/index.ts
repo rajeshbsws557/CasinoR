@@ -33,8 +33,14 @@ async function start(): Promise<void> {
       (userId, msg) => wsServer.sendToUser(userId, msg),
     );
 
-    // Initialize message handler
-    const wsHandler = new WsHandler(betManager, chatManager, gameLoop);
+    // Initialize message handler (pass broadcast and player count for leaderboard)
+    const wsHandler = new WsHandler(
+      betManager,
+      chatManager,
+      gameLoop,
+      (msg) => wsServer.broadcast(msg),
+      () => wsServer.getConnectionCount(),
+    );
 
     // Wire up WebSocket message handling
     wsServer.onMessage((ws, message) => {

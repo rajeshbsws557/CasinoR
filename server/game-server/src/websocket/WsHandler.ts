@@ -14,11 +14,16 @@ interface AuthenticatedWebSocket {
   send(data: string): void;
 }
 
+type BroadcastFn = (message: WsMessage) => void;
+type GetPlayerCountFn = () => number;
+
 export class WsHandler {
   constructor(
     private betManager: BetManager,
     private chatManager: ChatManager,
     private gameLoop: GameLoop,
+    private broadcastFn?: BroadcastFn,
+    private getPlayerCount?: GetPlayerCountFn,
   ) {}
 
   /**
@@ -133,6 +138,17 @@ export class WsHandler {
           reason: 'bet_placed',
         },
       }));
+
+      // Broadcast updated bets list to all clients for leaderboard
+      if (this.broadcastFn) {
+        this.broadcastFn({
+          type: 'PLAYERS_UPDATE',
+          data: {
+            bets: this.betManager.getAllBetsForDisplay(),
+            playerCount: this.getPlayerCount ? this.getPlayerCount() : 0,
+          },
+        });
+      }
     } catch (error) {
       ws.send(JSON.stringify({
         type: 'BET_ERROR',
@@ -173,6 +189,17 @@ export class WsHandler {
           reason: 'cashout',
         },
       }));
+
+      // Broadcast updated bets list for leaderboard after cashout
+      if (this.broadcastFn) {
+        this.broadcastFn({
+          type: 'PLAYERS_UPDATE',
+          data: {
+            bets: this.betManager.getAllBetsForDisplay(),
+            playerCount: this.getPlayerCount ? this.getPlayerCount() : 0,
+          },
+        });
+      }
     } catch (error) {
       ws.send(JSON.stringify({
         type: 'CASHOUT_ERROR',

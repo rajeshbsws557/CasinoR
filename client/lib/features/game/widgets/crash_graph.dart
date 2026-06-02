@@ -5,10 +5,12 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:crash_game/config/theme.dart';
 import 'package:crash_game/features/game/bloc/game_bloc.dart';
 
-class CrashGraph extends StatelessWidget {
+class CrashGraph extends StatefulWidget {
   final List<double> multiplierHistory;
   final double currentMultiplier;
   final GamePhase phase;
@@ -27,16 +29,101 @@ class CrashGraph extends StatelessWidget {
   });
 
   @override
+  State<CrashGraph> createState() => _CrashGraphState();
+}
+
+class _CrashGraphState extends State<CrashGraph> with SingleTickerProviderStateMixin {
+  double _visualMultiplier = 1.0;
+  DateTime _lastUpdate = DateTime.now();
+  late Ticker _ticker;
+  ui.Image? _planeImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _visualMultiplier = widget.currentMultiplier;
+    _lastUpdate = DateTime.now();
+    _ticker = createTicker(_onTick);
+    if (widget.phase == GamePhase.running || widget.phase == GamePhase.cashedOut) {
+      _ticker.start();
+    }
+    _loadPlaneImage();
+  }
+
+  Future<void> _loadPlaneImage() async {
+    try {
+      final data = await rootBundle.load('assets/images/plane.png');
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: 80);
+      final frame = await codec.getNextFrame();
+      if (mounted) {
+        setState(() {
+          _planeImage = frame.image;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load plane image: $e');
+    }
+  }
+
+  void _onTick(Duration elapsed) {
+    if (widget.phase == GamePhase.running || widget.phase == GamePhase.cashedOut) {
+      final now = DateTime.now();
+      final deltaMs = now.difference(_lastUpdate).inMilliseconds;
+      setState(() {
+        _visualMultiplier = widget.currentMultiplier * math.exp(0.00006 * deltaMs);
+      });
+    } else {
+      if (_ticker.isTicking) _ticker.stop();
+    }
+  }
+
+  @override
+  void didUpdateWidget(CrashGraph oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentMultiplier != oldWidget.currentMultiplier) {
+      _lastUpdate = DateTime.now();
+      _visualMultiplier = widget.currentMultiplier;
+    }
+    
+    final isRunningPhase = widget.phase == GamePhase.running || widget.phase == GamePhase.cashedOut;
+    
+    if (isRunningPhase && !_ticker.isTicking) {
+      _lastUpdate = DateTime.now();
+      _ticker.start();
+    } else if (!isRunningPhase && _ticker.isTicking) {
+      _ticker.stop();
+      _visualMultiplier = widget.currentMultiplier;
+    }
+    
+    if (!isRunningPhase) {
+      _visualMultiplier = widget.currentMultiplier;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    List<double> visualPoints = List.from(widget.multiplierHistory);
+    final isRunningPhase = widget.phase == GamePhase.running || widget.phase == GamePhase.cashedOut;
+    if (isRunningPhase && _visualMultiplier > 1.0) {
+       visualPoints.add(_visualMultiplier);
+    }
+
     return RepaintBoundary(
       child: CustomPaint(
         painter: _CrashGraphPainter(
-          points: multiplierHistory,
-          currentMultiplier: currentMultiplier,
-          phase: phase,
-          cashoutMultiplier: cashoutMultiplier,
-          cashoutProfit: cashoutProfit,
-          betAmount: betAmount,
+          points: visualPoints,
+          currentMultiplier: _visualMultiplier,
+          phase: widget.phase,
+          cashoutMultiplier: widget.cashoutMultiplier,
+          cashoutProfit: widget.cashoutProfit,
+          betAmount: widget.betAmount,
+          planeImage: _planeImage,
         ),
         size: Size.infinite,
       ),
@@ -51,6 +138,7 @@ class _CrashGraphPainter extends CustomPainter {
   final double? cashoutMultiplier;
   final int? cashoutProfit;
   final int? betAmount;
+  final ui.Image? planeImage;
 
   _CrashGraphPainter({
     required this.points,
@@ -59,6 +147,7 @@ class _CrashGraphPainter extends CustomPainter {
     this.cashoutMultiplier,
     this.cashoutProfit,
     this.betAmount,
+    this.planeImage,
   });
 
   @override
@@ -281,27 +370,39 @@ class _CrashGraphPainter extends CustomPainter {
 
       canvas.restore();
 
-      // Draw airplane emoji at the tip
-      final planeTp = TextPainter(
-        text: TextSpan(
-          text: '✈',
-          style: TextStyle(
-            fontSize: 26,
-            color: Colors.white,
-            shadows: [
-              Shadow(color: curveColor, blurRadius: 12),
-              Shadow(color: curveColor.withAlpha(120), blurRadius: 24),
-            ],
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      // Position and rotate the plane to match trajectory
       canvas.save();
       canvas.translate(lastPt.dx, lastPt.dy);
-      canvas.rotate(angle + math.pi / 4); // Adjust for emoji orientation
-      planeTp.paint(canvas, Offset(-planeTp.width / 2, -planeTp.height / 2));
+      canvas.rotate(angle + math.pi / 4); // Adjust for rotation
+
+      if (planeImage != null) {
+        // Draw the image using BlendMode.screen to make the pure black background invisible
+        final paint = Paint()
+           ..blendMode = BlendMode.screen
+           ..isAntiAlias = true
+           ..filterQuality = FilterQuality.high;
+           
+        final offset = Offset(-planeImage!.width / 2, -planeImage!.height / 2);
+        canvas.drawImage(planeImage!, offset, paint);
+      } else {
+        // Fallback to emoji
+        final planeTp = TextPainter(
+          text: TextSpan(
+            text: '✈',
+            style: TextStyle(
+              fontSize: 26,
+              color: Colors.white,
+              shadows: [
+                Shadow(color: curveColor, blurRadius: 12),
+                Shadow(color: curveColor.withAlpha(120), blurRadius: 24),
+              ],
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        planeTp.paint(canvas, Offset(-planeTp.width / 2, -planeTp.height / 2));
+      }
+      
       canvas.restore();
     }
 
