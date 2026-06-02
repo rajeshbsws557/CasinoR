@@ -209,8 +209,8 @@ export class GameLoop {
         const multiplier = Math.pow(Math.E, config.game.growthRate * elapsed);
         const roundedMultiplier = Math.floor(multiplier * 100) / 100;
 
-        // Check if we've hit the crash point
-        if (roundedMultiplier >= crashPoint) {
+        // Check if we've hit the crash point or maximum possible multiplier
+        if (roundedMultiplier >= crashPoint || roundedMultiplier >= 1000000 || isNaN(crashPoint)) {
           if (this.tickTimer) {
             clearInterval(this.tickTimer);
             this.tickTimer = null;

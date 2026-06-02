@@ -160,20 +160,24 @@ export class WsServer {
         return;
       }
 
-      // If user already connected, close the old connection
+      // If user already connected, reject the new connection
       const existing = this.clients.get(auth.userId);
       if (existing) {
-        // Decrement IP count for the old connection
-        const oldIp = existing.clientIp;
-        if (oldIp) {
-          const oldCount = this.ipConnectionCounts.get(oldIp) || 0;
-          if (oldCount > 1) {
-            this.ipConnectionCounts.set(oldIp, oldCount - 1);
-          } else {
-            this.ipConnectionCounts.delete(oldIp);
-          }
+        ws.send(JSON.stringify({
+          type: 'ERROR',
+          data: { message: 'You are already logged in on another device' }
+        }));
+        // We close the new connection
+        ws.close(4002, 'New connection from same account rejected');
+        
+        // Decrement IP count for the rejected connection
+        const newIpCount = this.ipConnectionCounts.get(clientIp) || 0;
+        if (newIpCount > 1) {
+          this.ipConnectionCounts.set(clientIp, newIpCount - 1);
+        } else {
+          this.ipConnectionCounts.delete(clientIp);
         }
-        existing.close(4002, 'New connection from same account');
+        return;
       }
 
       // Set up authenticated WebSocket

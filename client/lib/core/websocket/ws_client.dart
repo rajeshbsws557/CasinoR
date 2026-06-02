@@ -102,7 +102,12 @@ class WsClient {
             // Invalid message — skip
           }
         },
-        onDone: _handleDisconnect,
+        onDone: () {
+          if (_channel?.closeCode == 4002) {
+            _intentionalDisconnect = true;
+          }
+          _handleDisconnect();
+        },
         onError: (_) => _handleDisconnect(),
       );
     } catch (e) {

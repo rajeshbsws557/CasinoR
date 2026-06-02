@@ -61,7 +61,7 @@ export function calculateCrashPoint(
   //   P(crash ≥ x) ≈ 1/x (for large x)
   // Combined with house edge, expected return = ~97%
   const rawCrashPoint = (Math.pow(2, 32) / (intFromHash + 1));
-  const crashPoint = Math.floor(rawCrashPoint * 100) / 100;
+  const crashPoint = Math.min(1000000, Math.floor(rawCrashPoint * 100) / 100);
 
   return {
     crashPoint: Math.max(1.00, crashPoint),
