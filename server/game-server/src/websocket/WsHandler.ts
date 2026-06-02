@@ -70,13 +70,13 @@ export class WsHandler {
         return;
       }
 
-      const { amount, auto_cashout, client_seed } = message.data;
+      const { amount, auto_cashout, client_seed, panel_id } = message.data;
 
       // ── Strict input validation ──
       if (amount === undefined || amount === null || typeof amount !== 'number') {
         ws.send(JSON.stringify({
           type: 'BET_ERROR',
-          data: { message: 'Invalid bet amount' },
+          data: { message: 'Invalid bet amount', panel_id },
         }));
         return;
       }
@@ -85,7 +85,7 @@ export class WsHandler {
       if (!Number.isInteger(amount) || amount <= 0) {
         ws.send(JSON.stringify({
           type: 'BET_ERROR',
-          data: { message: 'Bet amount must be a positive integer (in paisa)' },
+          data: { message: 'Bet amount must be a positive integer (in paisa)', panel_id },
         }));
         return;
       }
@@ -95,7 +95,7 @@ export class WsHandler {
         if (typeof auto_cashout !== 'number' || auto_cashout < 1.01 || auto_cashout > 1000000) {
           ws.send(JSON.stringify({
             type: 'BET_ERROR',
-            data: { message: 'Auto-cashout must be between 1.01x and 1,000,000x' },
+            data: { message: 'Auto-cashout must be between 1.01x and 1,000,000x', panel_id },
           }));
           return;
         }
@@ -107,7 +107,7 @@ export class WsHandler {
         if (typeof client_seed !== 'string' || client_seed.length > 64) {
           ws.send(JSON.stringify({
             type: 'BET_ERROR',
-            data: { message: 'Client seed must be a string (max 64 characters)' },
+            data: { message: 'Client seed must be a string (max 64 characters)', panel_id },
           }));
           return;
         }
@@ -126,7 +126,7 @@ export class WsHandler {
       // Confirm bet
       ws.send(JSON.stringify({
         type: 'BET_CONFIRMED',
-        data: { betId: result.betId, amount, auto_cashout: auto_cashout || null },
+        data: { betId: result.betId, amount, auto_cashout: auto_cashout || null, panel_id },
       }));
 
       // Send balance update after bet placement
@@ -152,7 +152,7 @@ export class WsHandler {
     } catch (error) {
       ws.send(JSON.stringify({
         type: 'BET_ERROR',
-        data: { message: (error as Error).message },
+        data: { message: (error as Error).message, panel_id: message.data?.panel_id },
       }));
     }
   }
