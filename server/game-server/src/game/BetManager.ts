@@ -24,6 +24,9 @@ export class BetManager {
   // Active bets for the current round (in-memory for speed)
   private activeBets: Map<string, ActiveBet> = new Map();
   private cashedOutBets: Map<string, CashedOutBet> = new Map();
+  
+  // Anti-Abuse: Track consecutive same auto-cashout values
+  private userCashoutHistory: Map<string, { multiplier: number, count: number }> = new Map();
 
   constructor(private gameState: GameState) {}
 
@@ -38,6 +41,7 @@ export class BetManager {
     amount: number,
     autoCashout: number | null,
     clientSeed: string,
+    panelId: number,
   ): Promise<{ betId: string, newBalance: number }> {
     // Validate game phase
     if (this.gameState.getPhase() !== 'BETTING') {
@@ -60,6 +64,22 @@ export class BetManager {
       throw new Error('Auto-cashout must be at least 1.01x');
     }
 
+    // Bot detection heuristic: track repetitive exact auto-cashouts
+    if (autoCashout !== null) {
+      const history = this.userCashoutHistory.get(userId);
+      if (history && history.multiplier === autoCashout) {
+        history.count++;
+        if (history.count > 10) {
+          console.warn(`[Anti-Abuse] Flagging user ${username} (${userId}) for repetitive auto-cashout at ${autoCashout}x (${history.count} times)`);
+          // Here we could flag the user in the DB for admin review, or add a random delay
+          // For now, we log the warning and add a tiny random offset to break exact scripts
+          autoCashout += (Math.random() * 0.05);
+        }
+      } else {
+        this.userCashoutHistory.set(userId, { multiplier: autoCashout, count: 1 });
+      }
+    }
+
     // Check for max bets in this round
     let userBetCount = 0;
     for (const bet of this.activeBets.values()) {
@@ -69,12 +89,12 @@ export class BetManager {
       throw new Error('You can only place up to 2 bets per round');
     }
 
-    // Rate limiting (500ms to allow quick double bets)
+    // Rate limiting (500ms per panel to allow quick dual bets)
     const redis = getRedisClient();
-    const rateLimitKey = `ratelimit:bet:${userId}`;
+    const rateLimitKey = `ratelimit:bet:${userId}:${panelId}`;
     const isLimited = await redis.get(rateLimitKey);
     if (isLimited) {
-      throw new Error('Please wait before placing another bet');
+      throw new Error('Please wait before placing another bet on this panel');
     }
     await redis.psetex(rateLimitKey, 500, '1');
 
@@ -88,18 +108,26 @@ export class BetManager {
       await session.withTransaction(async () => {
         const userOid = new ObjectId(userId);
 
-        // Debit balance (fail if insufficient)
+        // Debit balance (fail if insufficient) and update required wager
+        const user = await db.collection('users').findOne({ _id: userOid }, { session });
+        if (!user || user.balance < amount) {
+          throw new Error('Insufficient balance');
+        }
+
+        let newRequiredWager = (user.required_wager || 0) - amount;
+        if (newRequiredWager < 0) newRequiredWager = 0;
+
         const userResult = await db.collection('users').findOneAndUpdate(
-          { _id: userOid, balance: { $gte: amount } },
+          { _id: userOid },
           {
             $inc: { balance: -amount, total_wagered: amount },
-            $set: { updated_at: new Date() },
+            $set: { updated_at: new Date(), required_wager: newRequiredWager },
           },
           { returnDocument: 'after', session }
         );
 
         if (!userResult) {
-          throw new Error('Insufficient balance');
+          throw new Error('Failed to update user balance');
         }
 
         newBalance = userResult.balance;
@@ -194,8 +222,24 @@ export class BetManager {
     }
 
     const multiplier = this.gameState.getCurrentMultiplier();
-    const payout = Math.floor(bet.amount * multiplier);
-    const profit = payout - bet.amount;
+    let payout = Math.floor(bet.amount * multiplier);
+
+    // Apply Max Payout Limit
+    if (payout > config.game.maxPayout) {
+      payout = config.game.maxPayout;
+      console.log(`[BetManager] Payout capped at ৳${(config.game.maxPayout / 100).toFixed(2)} for ${bet.username}`);
+    }
+
+    let profit = payout - bet.amount;
+    let rake = 0;
+
+    // Apply Rake on Profit
+    if (profit > 0) {
+      rake = Math.floor(profit * config.game.rakePercentage);
+    }
+
+    const finalPayout = payout - rake;
+    const finalProfit = finalPayout - bet.amount;
 
     // Atomic MongoDB transaction: credit balance + update bet + ledger
     const db = getDb();
@@ -213,7 +257,7 @@ export class BetManager {
         const userResult = await db.collection('users').findOneAndUpdate(
           { _id: userOid },
           {
-            $inc: { balance: payout, total_profit: profit },
+            $inc: { balance: finalPayout, total_profit: finalProfit },
             $set: { updated_at: now },
           },
           { returnDocument: 'after', session }
@@ -231,7 +275,7 @@ export class BetManager {
           {
             $set: {
               cashout_multiplier: Math.floor(multiplier * 100) / 100,
-              profit,
+              profit: finalProfit,
               status: 'won',
               cashed_out_at: now,
             },
@@ -243,7 +287,7 @@ export class BetManager {
         await db.collection('transactions').insertOne({
           user_id: userOid,
           type: 'bet_win',
-          amount: payout,
+          amount: finalPayout,
           balance_after: newBalance,
           reference_id: `win_${roundId}_${userId}`,
           created_at: now,
@@ -252,7 +296,7 @@ export class BetManager {
         // Update round stats
         await db.collection('game_rounds').updateOne(
           { round_id: roundId },
-          { $inc: { total_paid_out: payout } },
+          { $inc: { total_paid_out: finalPayout } },
           { session }
         );
       });
@@ -261,14 +305,14 @@ export class BetManager {
       const cashedOut: CashoutResult = {
         ...bet,
         cashoutMultiplier: Math.floor(multiplier * 100) / 100,
-        profit,
+        profit: finalProfit,
         newBalance,
       };
 
       this.activeBets.delete(betId);
       this.cashedOutBets.set(betId, cashedOut);
 
-      console.log(`[BetManager] Cashout: ${bet.username} @ ${multiplier.toFixed(2)}x → profit ৳${(profit / 100).toFixed(2)} | Balance: ৳${(newBalance / 100).toFixed(2)}`);
+      console.log(`[BetManager] Cashout: ${bet.username} @ ${multiplier.toFixed(2)}x → profit ৳${(finalProfit / 100).toFixed(2)} (Rake: ৳${(rake/100).toFixed(2)}) | Balance: ৳${(newBalance / 100).toFixed(2)}`);
 
       return cashedOut;
     } finally {

@@ -121,6 +121,7 @@ export class WsHandler {
         amount,
         auto_cashout || null,
         sanitizedClientSeed,
+        panel_id,
       );
 
       // Confirm bet
