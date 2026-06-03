@@ -1,9 +1,13 @@
 // ============================================
-// Admin Routes — Protected by API Key
+// Admin Routes — Protected by HttpOnly Cookie Session
 // ============================================
 
 import { Router } from 'express';
-import { adminMiddleware } from '../middleware/admin';
+import {
+  adminSessionMiddleware,
+  adminLoginHandler,
+  adminLogoutHandler,
+} from '../middleware/admin-session';
 import {
   getPendingDeposits,
   approveDeposit,
@@ -18,7 +22,12 @@ import {
 
 const router = Router();
 
-router.use(adminMiddleware); // All admin routes require API key
+// ── Public endpoints (before auth middleware) ──
+router.post('/login', adminLoginHandler);
+router.post('/logout', adminLogoutHandler);
+
+// ── Protected endpoints (require valid session cookie or X-Admin-Key) ──
+router.use(adminSessionMiddleware);
 
 // Deposit management
 router.get('/deposits/pending', getPendingDeposits);

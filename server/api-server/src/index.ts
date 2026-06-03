@@ -4,6 +4,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { config } from './config/env';
 import { getRedisClient, closeRedis } from './services/RedisService';
 import { connectMongo, closeMongo } from './services/MongoService';
@@ -32,6 +33,9 @@ app.use(cors(corsOptions));
 
 // Body parsing with size limits
 app.use(express.json({ limit: '10kb' })); // Stricter limit for wallet/auth requests
+
+// Cookie parser for admin session cookies
+app.use(cookieParser());
 
 // Security headers
 app.use((_req, res, next) => {

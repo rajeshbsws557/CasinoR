@@ -19,34 +19,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    const key = localStorage.getItem('admin_key');
-    if (key) {
-      setIsAdmin(true);
-    } else {
-      setIsAdmin(false);
-      if (pathname !== '/login') {
-        router.push('/login');
-      }
-    }
-    setLoading(false);
+    // Check auth status by attempting to fetch stats.
+    // If we have a valid HttpOnly cookie session, it will succeed.
+    api.getStats()
+      .then(() => {
+        setIsAdmin(true);
+      })
+      .catch(() => {
+        setIsAdmin(false);
+        if (pathname !== '/login') {
+          router.push('/login');
+        }
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [pathname, router]);
 
   const login = async (key: string) => {
-    localStorage.setItem('admin_key', key);
     try {
-      await api.getStats();
+      await api.login(key);
       setIsAdmin(true);
       router.push('/');
     } catch (err: any) {
-      localStorage.removeItem('admin_key');
       alert(err.message || 'Invalid API key');
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('admin_key');
-    setIsAdmin(false);
-    router.push('/login');
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setIsAdmin(false);
+      router.push('/login');
+    }
   };
 
   if (loading) {

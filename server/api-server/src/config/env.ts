@@ -42,6 +42,8 @@ export const config = {
 
   admin: {
     apiKey: process.env.ADMIN_API_KEY || '',
+    sessionSecret: process.env.ADMIN_SESSION_SECRET || process.env.JWT_SECRET || 'dev-admin-session-secret',
+    sessionMaxAgeMs: parseInt(process.env.ADMIN_SESSION_MAX_AGE_MS || '7200000', 10), // 2 hours
   },
 
   wallet: {

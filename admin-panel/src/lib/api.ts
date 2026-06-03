@@ -8,10 +8,8 @@ export class ApiError extends Error {
 }
 
 function getHeaders(): HeadersInit {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('admin_key') : null;
   return {
     'Content-Type': 'application/json',
-    ...(token ? { 'X-Admin-Key': token } : {}),
   };
 }
 
@@ -20,7 +18,6 @@ async function handleResponse(response: Response) {
   if (!response.ok || !data.success) {
     if (response.status === 401 || response.status === 403) {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('admin_key');
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
@@ -32,9 +29,31 @@ async function handleResponse(response: Response) {
 }
 
 export const api = {
+  // Auth
+  login: async (key: string) => {
+    const res = await fetch(`${API_URL}/login`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ key }),
+      credentials: 'include',
+    });
+    return handleResponse(res);
+  },
+  logout: async () => {
+    const res = await fetch(`${API_URL}/logout`, {
+      method: 'POST',
+      headers: getHeaders(),
+      credentials: 'include',
+    });
+    return handleResponse(res);
+  },
+
   // Dashboard
   getStats: async () => {
-    const res = await fetch(`${API_URL}/stats`, { headers: getHeaders() });
+    const res = await fetch(`${API_URL}/stats`, { 
+      headers: getHeaders(),
+      credentials: 'include',
+    });
     return handleResponse(res);
   },
 
@@ -45,7 +64,10 @@ export const api = {
     query.set('limit', limit.toString());
     if (search) query.set('search', search);
     
-    const res = await fetch(`${API_URL}/users?${query.toString()}`, { headers: getHeaders() });
+    const res = await fetch(`${API_URL}/users?${query.toString()}`, { 
+      headers: getHeaders(),
+      credentials: 'include',
+    });
     return handleResponse(res);
   },
   updateUserBalance: async (userId: string, amount: number, reason: string) => {
@@ -53,6 +75,7 @@ export const api = {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ amount, reason }),
+      credentials: 'include',
     });
     return handleResponse(res);
   },
@@ -62,13 +85,17 @@ export const api = {
     const query = new URLSearchParams();
     query.set('page', page.toString());
     query.set('limit', limit.toString());
-    const res = await fetch(`${API_URL}/deposits/pending?${query.toString()}`, { headers: getHeaders() });
+    const res = await fetch(`${API_URL}/deposits/pending?${query.toString()}`, { 
+      headers: getHeaders(),
+      credentials: 'include',
+    });
     return handleResponse(res);
   },
   approveDeposit: async (id: string) => {
     const res = await fetch(`${API_URL}/deposits/${id}/approve`, {
       method: 'POST',
       headers: getHeaders(),
+      credentials: 'include',
     });
     return handleResponse(res);
   },
@@ -77,6 +104,7 @@ export const api = {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ reason }),
+      credentials: 'include',
     });
     return handleResponse(res);
   },
@@ -86,13 +114,17 @@ export const api = {
     const query = new URLSearchParams();
     query.set('page', page.toString());
     query.set('limit', limit.toString());
-    const res = await fetch(`${API_URL}/withdrawals/pending?${query.toString()}`, { headers: getHeaders() });
+    const res = await fetch(`${API_URL}/withdrawals/pending?${query.toString()}`, { 
+      headers: getHeaders(),
+      credentials: 'include',
+    });
     return handleResponse(res);
   },
   completeWithdrawal: async (id: string) => {
     const res = await fetch(`${API_URL}/withdrawals/${id}/complete`, {
       method: 'POST',
       headers: getHeaders(),
+      credentials: 'include',
     });
     return handleResponse(res);
   },
@@ -101,6 +133,7 @@ export const api = {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ reason }),
+      credentials: 'include',
     });
     return handleResponse(res);
   },
