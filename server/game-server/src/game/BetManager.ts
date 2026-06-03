@@ -175,6 +175,7 @@ export class BetManager {
         amount,
         autoCashout,
         clientSeed,
+        panelId,
         placedAt: new Date(),
       };
 

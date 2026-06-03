@@ -253,6 +253,7 @@ export class GameLoop {
               multiplier: cashout.cashoutMultiplier,
               profit: cashout.profit,
               payout: cashout.amount + cashout.profit,
+              panel_id: cashout.panelId,
             },
           });
 

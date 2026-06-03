@@ -178,6 +178,7 @@ export class WsHandler {
           multiplier: result.cashoutMultiplier,
           profit: result.profit,
           payout: result.amount + result.profit,
+          panel_id: result.panelId,
         },
       }));
 

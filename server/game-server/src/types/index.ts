@@ -22,6 +22,7 @@ export interface ActiveBet {
   amount: number;
   autoCashout: number | null;
   clientSeed: string;
+  panelId: number;
   placedAt: Date;
 }
 
