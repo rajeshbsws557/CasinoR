@@ -383,6 +383,21 @@ export async function submitWithdrawal(req: Request, res: Response): Promise<voi
       }
     }
 
+    // ── Check wagering requirements ──
+    const user = await db.collection('users').findOne({ _id: userId });
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    if (user.required_wager && user.required_wager > 0) {
+      res.status(400).json({
+        success: false,
+        error: `You must wager an additional ৳${(user.required_wager / 100).toFixed(2)} before withdrawing.`,
+      });
+      return;
+    }
+
     // ── Check pending withdrawals ──
     const pendingCount = await db.collection('withdrawals').countDocuments({
       user_id: userId,

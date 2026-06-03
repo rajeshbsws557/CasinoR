@@ -69,6 +69,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       email: email.toLowerCase(),
       password_hash: passwordHash,
       balance: config.wallet.initialBalance,
+      required_wager: config.wallet.initialBalance * 2,
       client_seed: clientSeed,
       total_wagered: 0,
       total_profit: 0,

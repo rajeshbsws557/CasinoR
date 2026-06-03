@@ -102,11 +102,11 @@ export async function approveDeposit(req: Request, res: Response): Promise<void>
           throw new Error('Deposit not found or already processed');
         }
 
-        // Credit user balance
+        // Credit user balance and increment required wager
         const userResult = await db.collection('users').findOneAndUpdate(
           { _id: deposit.user_id },
           {
-            $inc: { balance: deposit.amount },
+            $inc: { balance: deposit.amount, required_wager: deposit.amount * 2 },
             $set: { updated_at: new Date() },
           },
           { returnDocument: 'after', session }

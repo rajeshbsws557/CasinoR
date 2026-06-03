@@ -32,7 +32,9 @@ export const config = {
     tickIntervalMs: parseInt(process.env.TICK_INTERVAL_MS || '50', 10),
     growthRate: parseFloat(process.env.GROWTH_RATE || '0.00006'),
     minBet: parseInt(process.env.MIN_BET || '100', 10),
-    maxBet: parseInt(process.env.MAX_BET || '1000000', 10),
+    maxBet: parseInt(process.env.MAX_BET || '600000', 10), // ৳6000
+    maxPayout: parseInt(process.env.MAX_PAYOUT || '2500000', 10), // ৳25000
+    rakePercentage: parseFloat(process.env.RAKE_PERCENTAGE || '0.02'), // 2% rake on profit
   },
 
   ws: {

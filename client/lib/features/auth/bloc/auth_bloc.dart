@@ -7,6 +7,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:crash_game/features/auth/models/user_model.dart';
 import 'package:crash_game/features/auth/repositories/auth_repository.dart';
+import 'package:crash_game/core/utils/error_handler.dart';
 
 // ─── Events ───
 
@@ -122,6 +123,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthAuthenticated(user: result.user, token: result.token));
     } catch (e) {
       final message = _extractErrorMessage(e);
+      ErrorHandler.showError(message);
       emit(AuthError(message));
       emit(AuthUnauthenticated());
     }
@@ -141,6 +143,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthAuthenticated(user: result.user, token: result.token));
     } catch (e) {
       final message = _extractErrorMessage(e);
+      ErrorHandler.showError(message);
       emit(AuthError(message));
       emit(AuthUnauthenticated());
     }

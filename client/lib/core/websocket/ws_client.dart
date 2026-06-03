@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:crash_game/config/app_config.dart';
 import 'package:crash_game/core/websocket/ws_message.dart';
+import 'package:crash_game/core/utils/error_handler.dart';
 
 enum WsConnectionState { disconnected, connecting, connected, reconnecting }
 
@@ -105,6 +106,7 @@ class WsClient {
         onDone: () {
           if (_channel?.closeCode == 4002) {
             _intentionalDisconnect = true;
+            ErrorHandler.showError('Session terminated: Logged in from another location.');
           }
           _handleDisconnect();
         },

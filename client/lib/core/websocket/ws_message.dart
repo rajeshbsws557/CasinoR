@@ -23,6 +23,7 @@ class WsMessage {
 
   factory WsMessage.bet({
     required int amount,
+    required int panelId,
     double? autoCashout,
     String? clientSeed,
   }) {
@@ -30,6 +31,7 @@ class WsMessage {
       type: 'BET',
       data: {
         'amount': amount,
+        'panel_id': panelId,
         if (autoCashout != null) 'auto_cashout': autoCashout,
         if (clientSeed != null) 'client_seed': clientSeed,
       },

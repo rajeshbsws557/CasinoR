@@ -36,257 +36,316 @@ class SingleBetCard extends StatefulWidget {
 }
 
 class _SingleBetCardState extends State<SingleBetCard> {
-  double _betAmount = 10.0;
+  final _betAmountController = TextEditingController(text: '10.00');
   final _autoCashoutController = TextEditingController();
 
-  String? _myBetId;
+  double get _betAmount => double.tryParse(_betAmountController.text) ?? 10.0;
+
   bool _isPendingPlacement = false;
   bool _isAutoBetEnabled = false;
   bool _isNextRoundBetQueued = false;
-  bool _showAutoTab = false; // false = Bet tab, true = Auto tab
+  bool _showAutoTab = false;
+  bool _autoCashoutEnabled = false;
 
   @override
   void dispose() {
+    _betAmountController.dispose();
     _autoCashoutController.dispose();
     super.dispose();
   }
 
   void _adjustAmount(double delta) {
+    final current = _betAmount;
+    final newAmount = (current + delta).clamp(1.0, 999999.0);
     setState(() {
-      _betAmount = (_betAmount + delta).clamp(1.0, 999999.0);
+      _betAmountController.text = newAmount.toStringAsFixed(2);
     });
   }
 
   void _setAmount(double amount) {
     setState(() {
-      _betAmount = amount;
+      _betAmountController.text = amount.toStringAsFixed(2);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<GameBloc, GameState>(
-      listenWhen: (previous, current) {
-        // Claim the newest bet if we were waiting for it
-        if (_isPendingPlacement && previous.myBets.length < current.myBets.length) {
-          final newBet = current.myBets.last;
-          if (_myBetId == null) {
-            _myBetId = newBet.betId;
-            _isPendingPlacement = false;
-          }
-        }
-        // Reset when a new round starts
-        if (previous.phase != GamePhase.betting && current.phase == GamePhase.betting) {
-          _myBetId = null;
-          _isPendingPlacement = false;
-          
-          if (_isNextRoundBetQueued || _isAutoBetEnabled) {
-             _isNextRoundBetQueued = false; // reset queue
-             // Automatically place the bet
-             Future.microtask(() {
-               if (mounted && context.mounted) {
-                 _placeBet(context, force: true);
-               }
-             });
-          }
-        }
-        return false;
-      },
-      listener: (context, state) {},
-      builder: (context, gameState) {
-        return BlocBuilder<AuthBloc, AuthState>(
-          builder: (context, authState) {
-            final balance = authState is AuthAuthenticated
-                ? authState.user.balance
-                : 0;
-
-            final isBettingPhase = gameState.phase == GamePhase.betting;
-            final isRunning = gameState.phase == GamePhase.running;
-            
-            MyBetState? myBetData;
-            if (_myBetId != null) {
-              try {
-                myBetData = gameState.myBets.firstWhere((b) => b.betId == _myBetId);
-              } catch (_) {}
-            }
-
-            final hasActiveBet = myBetData != null && !myBetData.isCashedOut;
-            final canBet = !hasActiveBet && !_isPendingPlacement;
-            final canCashout = isRunning && hasActiveBet;
-            final isCashedOut = myBetData?.isCashedOut ?? false;
-
-            return Container(
-              decoration: BoxDecoration(
-                color: AppTheme.surface.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.border.withOpacity(0.4)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ─── Bet / Auto Tabs ───
-                  _buildTabs(canBet),
-                  
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                    child: _showAutoTab
-                        ? _buildAutoContent(canBet)
-                        : _buildBetContent(
-                            context, gameState, canBet, canCashout,
-                            isCashedOut, isBettingPhase, myBetData,
-                          ),
-                  ),
-                ],
-              ),
-            );
+    return MultiBlocListener(
+      listeners: [
+        // Listen for new round starts to auto-bet
+        BlocListener<GameBloc, GameState>(
+          listenWhen: (previous, current) {
+            return previous.phase != GamePhase.betting &&
+                current.phase == GamePhase.betting;
           },
-        );
-      },
-    );
-  }
+          listener: (context, state) {
+            setState(() => _isPendingPlacement = false);
 
-  Widget _buildTabs(bool canBet) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.card.withOpacity(0.6),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          topRight: Radius.circular(12),
+            if (_isNextRoundBetQueued || _isAutoBetEnabled) {
+              _isNextRoundBetQueued = false;
+              Future.microtask(() {
+                if (mounted && context.mounted) {
+                  _placeBet(context, force: true);
+                }
+              });
+            }
+          },
         ),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          Expanded(
-            child: _TabButton(
-              label: 'Bet',
-              isActive: !_showAutoTab,
-              onTap: () => setState(() => _showAutoTab = false),
-            ),
-          ),
-          Expanded(
-            child: _TabButton(
-              label: 'Auto',
-              isActive: _showAutoTab,
-              onTap: () => setState(() => _showAutoTab = true),
-            ),
-          ),
-          // Copy/expand button (cosmetic)
-          GestureDetector(
-            onTap: () {},
-            child: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppTheme.surface.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.copy_all, size: 14, color: AppTheme.textMuted),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBetContent(
-    BuildContext context,
-    GameState gameState,
-    bool canBet,
-    bool canCashout,
-    bool isCashedOut,
-    bool isBettingPhase,
-    MyBetState? myBetData,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Left side: Amount controls
-        Expanded(
-          flex: 4,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // −  Amount  +
-              _buildAmountRow(canBet),
-              const SizedBox(height: 6),
-              // Quick preset buttons
-              _buildPresetButtons(canBet),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        // Right side: Bet / Cashout button
-        Expanded(
-          flex: 5,
-          child: SizedBox(
-            height: 90,
-            child: canCashout
-                ? _buildCashoutButton(context, gameState, myBetData!)
-                : isCashedOut
-                    ? _buildCashedOutState(myBetData!)
-                    : _buildBetButton(context, canBet, isBettingPhase),
-          ),
+        // Listen for bet errors targeting THIS panel
+        BlocListener<GameBloc, GameState>(
+          listenWhen: (previous, current) {
+            return current.errorMessage != null &&
+                current.errorMessage != previous.errorMessage;
+          },
+          listener: (context, state) {
+            // Reset pending state on any error (the GameBetError event
+            // also fires, but we catch it here as a safety net)
+            if (_isPendingPlacement) {
+              setState(() => _isPendingPlacement = false);
+            }
+          },
         ),
       ],
+      child: BlocBuilder<GameBloc, GameState>(
+        builder: (context, gameState) {
+          return BlocBuilder<AuthBloc, AuthState>(
+            builder: (context, authState) {
+              final isBettingPhase = gameState.phase == GamePhase.betting;
+              final isRunning = gameState.phase == GamePhase.running;
+
+              // Find THIS panel's bet
+              MyBetState? myBetData;
+              try {
+                myBetData = gameState.myBets
+                    .firstWhere((b) => b.panelId == widget.index);
+                if (_isPendingPlacement) {
+                  Future.microtask(() {
+                    if (mounted) setState(() => _isPendingPlacement = false);
+                  });
+                }
+              } catch (_) {}
+
+              final hasActiveBet =
+                  myBetData != null && !myBetData.isCashedOut;
+              final canBet = !hasActiveBet && !_isPendingPlacement;
+              final canCashout = isRunning && hasActiveBet;
+              final isCashedOut = myBetData?.isCashedOut ?? false;
+
+              return Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: AppTheme.border.withOpacity(0.4)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Left: Amount + Presets + Auto controls ──
+                    Expanded(
+                      flex: 5,
+                      child: _buildLeftSection(context, canBet),
+                    ),
+                    const SizedBox(width: 10),
+                    // ── Right: Tabs + Action Button ──
+                    SizedBox(
+                      width: 130,
+                      child: _buildRightSection(
+                        context,
+                        gameState,
+                        canBet,
+                        canCashout,
+                        isCashedOut,
+                        isBettingPhase,
+                        myBetData,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildAutoContent(bool canBet) {
+  Widget _buildLeftSection(BuildContext context, bool canBet) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Auto cashout field
-        TextField(
-          controller: _autoCashoutController,
-          enabled: canBet,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: GoogleFonts.jetBrainsMono(
-            color: AppTheme.textPrimary,
-            fontSize: 14,
-          ),
-          decoration: InputDecoration(
-            labelText: 'Auto Cashout (x)',
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            filled: true,
-            fillColor: AppTheme.card.withOpacity(0.5),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppTheme.border.withOpacity(0.3)),
+        // ── Amount Row: [ - ]  Amount  [ + ] ──
+        _buildAmountRow(canBet),
+        const SizedBox(height: 6),
+
+        // ── Presets: 2x2 grid ──
+        Row(
+          children: [
+            Expanded(child: _buildPresetButton(0.50, canBet)),
+            const SizedBox(width: 6),
+            Expanded(child: _buildPresetButton(40.00, canBet)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(child: _buildPresetButton(380.00, canBet)),
+            const SizedBox(width: 6),
+            Expanded(child: _buildPresetButton(3000.00, canBet)),
+          ],
+        ),
+        const SizedBox(height: 6),
+
+        // ── MAX Button ──
+        GestureDetector(
+          onTap: canBet
+              ? () {
+                  final authState = context.read<AuthBloc>().state;
+                  final balance = authState is AuthAuthenticated
+                      ? authState.user.balance / 100
+                      : 0.0;
+                  _setAmount(balance);
+                }
+              : null,
+          child: Container(
+            height: 28,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppTheme.border.withOpacity(0.3)),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppTheme.border.withOpacity(0.3)),
+            alignment: Alignment.center,
+            child: Text(
+              'MAX',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: canBet
+                    ? AppTheme.textMuted
+                    : AppTheme.textMuted.withOpacity(0.5),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        // Auto bet toggle
+
+        const SizedBox(height: 8),
+
+        // ── Bottom Row: Autoplay + Auto Cash Out ──
         Row(
           children: [
-            SizedBox(
-              height: 22,
-              width: 22,
-              child: Checkbox(
-                value: _isAutoBetEnabled,
-                onChanged: canBet ? (val) {
-                  setState(() {
-                    _isAutoBetEnabled = val ?? false;
-                  });
-                } : null,
-                activeColor: AppTheme.winGreen,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                side: BorderSide(color: AppTheme.textMuted),
+            // Autoplay button
+            GestureDetector(
+              onTap: canBet
+                  ? () {
+                      setState(() {
+                        _isAutoBetEnabled = !_isAutoBetEnabled;
+                      });
+                    }
+                  : null,
+              child: Container(
+                height: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: _isAutoBetEnabled
+                      ? const Color(0xFF0D84E7)
+                      : const Color(0xFF0D84E7).withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'Autoplay',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 6),
-            Text(
-              'Auto Bet (next round)',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w500,
+            // Auto Cash Out toggle + input
+            Expanded(
+              child: Row(
+                children: [
+                  Text(
+                    'Auto C/O',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      color: AppTheme.textMuted,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 28,
+                    height: 16,
+                    child: FittedBox(
+                      fit: BoxFit.contain,
+                      child: Switch(
+                        value: _autoCashoutEnabled,
+                        onChanged: canBet
+                            ? (val) {
+                                setState(() {
+                                  _autoCashoutEnabled = val;
+                                  if (val && _autoCashoutController.text.isEmpty) {
+                                    _autoCashoutController.text = '1.50';
+                                  }
+                                  if (!val) {
+                                    _autoCashoutController.clear();
+                                  }
+                                });
+                              }
+                            : null,
+                        activeColor: Colors.white,
+                        activeTrackColor: const Color(0xFF10A814),
+                        inactiveTrackColor: AppTheme.surface,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 44,
+                    height: 22,
+                    child: TextField(
+                      controller: _autoCashoutController,
+                      enabled: canBet && _autoCashoutEnabled,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: _autoCashoutEnabled
+                            ? AppTheme.textPrimary
+                            : AppTheme.textMuted,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 4),
+                        suffixText: 'x',
+                        suffixStyle: GoogleFonts.inter(
+                            fontSize: 9, color: AppTheme.textMuted),
+                        filled: true,
+                        fillColor: Colors.black.withOpacity(0.2),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(
+                              color: AppTheme.border.withOpacity(0.3)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(
+                              color: AppTheme.border.withOpacity(0.3)),
+                        ),
+                        disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(
+                              color: AppTheme.border.withOpacity(0.15)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -295,121 +354,213 @@ class _SingleBetCardState extends State<SingleBetCard> {
     );
   }
 
-  Widget _buildAmountRow(bool canBet) {
-    return Container(
-      height: 42,
-      decoration: BoxDecoration(
-        color: AppTheme.card.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.border.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          // − button
-          _CircleButton(
-            icon: Icons.remove,
-            onTap: canBet ? () => _adjustAmount(-1.0) : null,
+  Widget _buildRightSection(
+    BuildContext context,
+    GameState gameState,
+    bool canBet,
+    bool canCashout,
+    bool isCashedOut,
+    bool isBettingPhase,
+    MyBetState? myBetData,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Tabs: Bet | Auto ──
+        Container(
+          height: 26,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(6),
           ),
-          // Amount display
-          Expanded(
-            child: Center(
-              child: Text(
-                _betAmount.toStringAsFixed(2),
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: canBet ? AppTheme.textPrimary : AppTheme.textMuted,
-                ),
-              ),
-            ),
-          ),
-          // + button
-          _CircleButton(
-            icon: Icons.add,
-            onTap: canBet ? () => _adjustAmount(1.0) : null,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPresetButtons(bool canBet) {
-    const presets = [100, 200, 500, 10000];
-    return Row(
-      children: presets.map((amount) {
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: GestureDetector(
-              onTap: canBet ? () => _setAmount(amount.toDouble()) : null,
-              child: Container(
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppTheme.card.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.border.withOpacity(0.3)),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  amount >= 10000 ? '${(amount / 1000).toInt()},000' : '$amount',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: canBet ? AppTheme.textPrimary : AppTheme.textMuted,
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _showAutoTab = false),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: !_showAutoTab
+                          ? AppTheme.surface
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Bet',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: !_showAutoTab
+                            ? AppTheme.textPrimary
+                            : AppTheme.textMuted,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _showAutoTab = true),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _showAutoTab
+                          ? AppTheme.surface
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Auto',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: _showAutoTab
+                            ? AppTheme.textPrimary
+                            : AppTheme.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        );
-      }).toList(),
+        ),
+        const SizedBox(height: 6),
+
+        // ── Action Button (fixed height, NOT expanded) ──
+        SizedBox(
+          height: 120,
+          child: canCashout
+              ? _buildCashoutButton(context, gameState, myBetData!)
+              : isCashedOut
+                  ? _buildCashedOutState(myBetData!)
+                  : _buildBetButton(context, canBet, isBettingPhase),
+        ),
+      ],
     );
   }
 
-  Widget _buildBetButton(BuildContext context, bool enabled, bool isBettingPhase) {
-    if (_isPendingPlacement) {
-      enabled = false;
-    }
-    
-    String btnLabel = 'Bet';
-    String btnAmount = '${_betAmount.toStringAsFixed(2)} BDT';
+  // ── Amount Row ──
+
+  Widget _buildAmountRow(bool canBet) {
+    return Row(
+      children: [
+        _CircleButton(
+          icon: Icons.remove,
+          onTap: canBet ? () => _adjustAmount(-1.0) : null,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Container(
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.25),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppTheme.border.withOpacity(0.4)),
+            ),
+            alignment: Alignment.center,
+            child: TextField(
+              controller: _betAmountController,
+              enabled: canBet,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: canBet ? AppTheme.textPrimary : AppTheme.textMuted,
+              ),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (val) => setState(() {}),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        _CircleButton(
+          icon: Icons.add,
+          onTap: canBet ? () => _adjustAmount(1.0) : null,
+        ),
+      ],
+    );
+  }
+
+  // ── Preset Button ──
+
+  Widget _buildPresetButton(double amount, bool canBet) {
+    final label = amount >= 1000
+        ? '${(amount / 1000).toStringAsFixed(0)},${(amount % 1000).toInt().toString().padLeft(3, '0')}'
+        : amount.toStringAsFixed(2);
+
+    return GestureDetector(
+      onTap: canBet ? () => _setAmount(amount) : null,
+      child: Container(
+        height: 28,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppTheme.border.withOpacity(0.3)),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: canBet
+                ? AppTheme.textMuted
+                : AppTheme.textMuted.withOpacity(0.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Bet Button ──
+
+  Widget _buildBetButton(
+      BuildContext context, bool enabled, bool isBettingPhase) {
+    if (_isPendingPlacement) enabled = false;
+
+    String btnLabel = 'BET';
+    String btnAmount = _betAmount.toStringAsFixed(2);
     bool isCancel = false;
 
     if (_isPendingPlacement) {
-      btnLabel = 'Waiting...';
+      btnLabel = 'WAITING';
       btnAmount = '';
+    } else if (_showAutoTab && _isAutoBetEnabled) {
+      btnLabel = 'AUTO BET';
     } else if (_isNextRoundBetQueued) {
-      btnLabel = 'Cancel';
-      btnAmount = 'Queued';
+      btnLabel = 'CANCEL';
+      btnAmount = '';
       isCancel = true;
     } else if (!isBettingPhase) {
-      btnLabel = 'Bet (Next)';
-      btnAmount = '${_betAmount.toStringAsFixed(2)} BDT';
+      btnLabel = 'BET (NEXT)';
     }
 
     return GestureDetector(
-      onTap: (enabled || isCancel) ? () {
-        if (isCancel) {
-           setState(() {
-             _isNextRoundBetQueued = false;
-           });
-        } else {
-           _placeBet(context, force: isBettingPhase);
-        }
-      } : null,
+      onTap: (enabled || isCancel)
+          ? () {
+              if (isCancel) {
+                setState(() => _isNextRoundBetQueued = false);
+              } else {
+                _placeBet(context, force: isBettingPhase);
+              }
+            }
+          : null,
       child: Container(
         decoration: BoxDecoration(
           color: isCancel
               ? AppTheme.lossRed
-              : (enabled ? AppTheme.winGreen : AppTheme.winGreen.withOpacity(0.3)),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: enabled && !isCancel ? [
-            BoxShadow(
-              color: AppTheme.winGreen.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ] : null,
+              : (enabled
+                  ? const Color(0xFF10A814)
+                  : const Color(0xFF10A814).withOpacity(0.35)),
+          borderRadius: BorderRadius.circular(10),
         ),
         alignment: Alignment.center,
         child: Column(
@@ -417,18 +568,18 @@ class _SingleBetCardState extends State<SingleBetCard> {
           children: [
             Text(
               btnLabel,
-              style: GoogleFonts.outfit(
+              style: GoogleFonts.inter(
                 fontSize: 18,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: Colors.white,
               ),
             ),
             if (btnAmount.isNotEmpty)
               Text(
                 btnAmount,
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                   color: Colors.white.withOpacity(0.9),
                 ),
               ),
@@ -438,8 +589,10 @@ class _SingleBetCardState extends State<SingleBetCard> {
     );
   }
 
-  Widget _buildCashoutButton(BuildContext context, GameState gameState, MyBetState myBet) {
-    // Display potential win in TAKA (divide paisa by 100)
+  // ── Cashout Button ──
+
+  Widget _buildCashoutButton(
+      BuildContext context, GameState gameState, MyBetState myBet) {
     final potentialWinPaisa = myBet.amount * gameState.currentMultiplier;
     final potentialWinTaka = potentialWinPaisa / 100;
 
@@ -449,37 +602,29 @@ class _SingleBetCardState extends State<SingleBetCard> {
         SoundManager().playCashout();
         context.read<GameBloc>().add(GameCashout(myBet.betId));
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+      child: Container(
         decoration: BoxDecoration(
-          color: AppTheme.winGreen,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.winGreen.withOpacity(0.4),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: const Color(0xFFE28B0A),
+          borderRadius: BorderRadius.circular(10),
         ),
         alignment: Alignment.center,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Cash Out',
-              style: GoogleFonts.outfit(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.background,
+              'CASH OUT',
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
             ),
             Text(
               '৳${potentialWinTaka.toStringAsFixed(2)}',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.background.withAlpha(200),
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withOpacity(0.9),
               ),
             ),
           ],
@@ -488,34 +633,36 @@ class _SingleBetCardState extends State<SingleBetCard> {
     );
   }
 
+  // ── Cashed Out State ──
+
   Widget _buildCashedOutState(MyBetState myBet) {
-    // Display win amount in TAKA
-    final winAmountPaisa = (myBet.amount + (myBet.cashoutProfit ?? 0));
+    final winAmountPaisa = myBet.amount + (myBet.cashoutProfit ?? 0);
     final winAmountTaka = winAmountPaisa / 100;
+
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.winGreen.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.winGreen.withOpacity(0.4)),
+        color: const Color(0xFF10A814).withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF10A814).withOpacity(0.4)),
       ),
       alignment: Alignment.center,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'Won',
-            style: GoogleFonts.outfit(
-              fontSize: 14,
+            'WON',
+            style: GoogleFonts.inter(
+              fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: AppTheme.winGreen,
+              color: const Color(0xFF10A814),
             ),
           ),
           Text(
             '৳${winAmountTaka.toStringAsFixed(2)}',
-            style: GoogleFonts.jetBrainsMono(
+            style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: AppTheme.winGreen,
+              color: const Color(0xFF10A814),
             ),
           ),
         ],
@@ -523,23 +670,21 @@ class _SingleBetCardState extends State<SingleBetCard> {
     );
   }
 
+  // ── Place Bet Logic ──
+
   void _placeBet(BuildContext context, {bool force = false}) {
     if (_betAmount <= 0) return;
-    
+
     final gameState = context.read<GameBloc>().state;
     if (!force && gameState.phase != GamePhase.betting) {
-      // Queue for next round
-      setState(() {
-        _isNextRoundBetQueued = true;
-      });
+      setState(() => _isNextRoundBetQueued = true);
       return;
     }
 
-    // Convert TAKA to PAISA before sending to server
     final amountPaisa = (_betAmount * 100).toInt();
 
     double? autoCashout;
-    if (_autoCashoutController.text.isNotEmpty) {
+    if (_autoCashoutEnabled && _autoCashoutController.text.isNotEmpty) {
       autoCashout = double.tryParse(_autoCashoutController.text);
     }
 
@@ -547,49 +692,12 @@ class _SingleBetCardState extends State<SingleBetCard> {
     SoundManager().playBet();
 
     context.read<GameBloc>().add(GamePlaceBet(
-      amount: amountPaisa,
-      autoCashout: autoCashout,
-    ));
+          amount: amountPaisa,
+          panelId: widget.index,
+          autoCashout: autoCashout,
+        ));
 
     setState(() => _isPendingPlacement = true);
-  }
-}
-
-// ─── Reusable Tab Button ───
-
-class _TabButton extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _TabButton({
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 34,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
-          color: isActive ? AppTheme.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-            color: isActive ? AppTheme.textPrimary : AppTheme.textMuted,
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -606,9 +714,8 @@ class _CircleButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 36,
-        height: 36,
-        margin: const EdgeInsets.symmetric(horizontal: 3),
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: AppTheme.surface.withOpacity(0.8),
@@ -616,7 +723,7 @@ class _CircleButton extends StatelessWidget {
         ),
         child: Icon(
           icon,
-          size: 16,
+          size: 14,
           color: onTap != null ? AppTheme.textPrimary : AppTheme.textMuted,
         ),
       ),

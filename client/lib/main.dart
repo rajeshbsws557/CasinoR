@@ -11,6 +11,7 @@ import 'package:crash_game/features/game/bloc/game_bloc.dart';
 import 'package:crash_game/features/auth/screens/login_screen.dart';
 import 'package:crash_game/features/navigation/main_nav.dart';
 import 'package:crash_game/core/audio/sound_manager.dart';
+import 'package:crash_game/core/utils/error_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +51,7 @@ class CrashGameApp extends StatelessWidget {
         title: 'CasinoR — by Rajesh Biswas (me)',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
+        scaffoldMessengerKey: ErrorHandler.scaffoldMessengerKey,
         home: BlocBuilder<AuthBloc, AuthState>(
           builder: (context, state) {
             if (state is AuthAuthenticated) {

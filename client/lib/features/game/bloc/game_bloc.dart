@@ -7,6 +7,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:crash_game/core/websocket/ws_client.dart';
 import 'package:crash_game/core/websocket/ws_message.dart';
+import 'package:crash_game/core/utils/error_handler.dart';
 
 // ─── Game Phase Enum ───
 
@@ -40,9 +41,10 @@ class GameConnectionStateChanged extends GameEvent {
 
 class GamePlaceBet extends GameEvent {
   final int amount;
+  final int panelId;
   final double? autoCashout;
   final String? clientSeed;
-  GamePlaceBet({required this.amount, this.autoCashout, this.clientSeed});
+  GamePlaceBet({required this.amount, required this.panelId, this.autoCashout, this.clientSeed});
 }
 
 class GameCashout extends GameEvent {
@@ -50,9 +52,17 @@ class GameCashout extends GameEvent {
   GameCashout(this.betId);
 }
 
+// Event to signal a specific panel's bet was rejected
+class GameBetError extends GameEvent {
+  final int panelId;
+  final String message;
+  GameBetError({required this.panelId, required this.message});
+}
+
 class MyBetState extends Equatable {
   final String betId;
   final int amount;
+  final int panelId;
   final double? autoCashout;
   final bool isCashedOut;
   final double? cashoutMultiplier;
@@ -61,6 +71,7 @@ class MyBetState extends Equatable {
   const MyBetState({
     required this.betId,
     required this.amount,
+    required this.panelId,
     this.autoCashout,
     this.isCashedOut = false,
     this.cashoutMultiplier,
@@ -75,6 +86,7 @@ class MyBetState extends Equatable {
     return MyBetState(
       betId: betId,
       amount: amount,
+      panelId: panelId,
       autoCashout: autoCashout,
       isCashedOut: isCashedOut ?? this.isCashedOut,
       cashoutMultiplier: cashoutMultiplier ?? this.cashoutMultiplier,
@@ -83,7 +95,7 @@ class MyBetState extends Equatable {
   }
 
   @override
-  List<Object?> get props => [betId, amount, isCashedOut, cashoutMultiplier, cashoutProfit];
+  List<Object?> get props => [betId, amount, panelId, isCashedOut, cashoutMultiplier, cashoutProfit];
 }
 
 // ─── State ───
@@ -187,6 +199,7 @@ class GameBloc extends Bloc<GameEvent, GameState> {
     on<GameConnectionStateChanged>(_onConnectionChanged);
     on<GamePlaceBet>(_onPlaceBet);
     on<GameCashout>(_onCashout);
+    on<GameBetError>(_onBetError);
   }
 
   Future<void> _onConnect(GameConnectRequested event, Emitter<GameState> emit) async {
@@ -219,6 +232,7 @@ class GameBloc extends Bloc<GameEvent, GameState> {
       case WsConnectionState.disconnected:
       case WsConnectionState.reconnecting:
         if (state.phase != GamePhase.connecting) {
+          ErrorHandler.showError('Connection lost. Reconnecting...');
           emit(state.copyWith(phase: GamePhase.disconnected));
         }
         break;
@@ -293,12 +307,14 @@ class GameBloc extends Bloc<GameEvent, GameState> {
       case 'BET_CONFIRMED':
         final betId = msg.data['betId'] as String?;
         final amount = (msg.data['amount'] as num?)?.toInt() ?? 0;
+        final panelId = (msg.data['panel_id'] as num?)?.toInt() ?? 0;
         final autoCashout = (msg.data['auto_cashout'] as num?)?.toDouble();
         
         if (betId != null) {
           final newBet = MyBetState(
             betId: betId,
             amount: amount,
+            panelId: panelId,
             autoCashout: autoCashout,
           );
           emit(state.copyWith(myBets: [...state.myBets, newBet]));
@@ -306,9 +322,12 @@ class GameBloc extends Bloc<GameEvent, GameState> {
         break;
 
       case 'BET_ERROR':
-        emit(state.copyWith(
-          errorMessage: msg.data['message'] as String?,
-        ));
+        final errorMsg = msg.data['message'] as String? ?? 'Bet failed';
+        final panelId = (msg.data['panel_id'] as num?)?.toInt() ?? -1;
+        ErrorHandler.showError(errorMsg);
+        // Fire a separate event so panels can listen and reset
+        add(GameBetError(panelId: panelId, message: errorMsg));
+        emit(state.copyWith(errorMessage: errorMsg));
         break;
 
       case 'CASHOUT_CONFIRMED':
@@ -347,9 +366,9 @@ class GameBloc extends Bloc<GameEvent, GameState> {
         break;
 
       case 'CASHOUT_ERROR':
-        emit(state.copyWith(
-          errorMessage: msg.data['message'] as String?,
-        ));
+        final errorMsg = msg.data['message'] as String? ?? 'Cashout failed';
+        ErrorHandler.showError(errorMsg);
+        emit(state.copyWith(errorMessage: errorMsg));
         break;
 
       case 'PLAYERS_UPDATE':
@@ -429,6 +448,7 @@ class GameBloc extends Bloc<GameEvent, GameState> {
   void _onPlaceBet(GamePlaceBet event, Emitter<GameState> emit) {
     _wsClient.send(WsMessage.bet(
       amount: event.amount,
+      panelId: event.panelId,
       autoCashout: event.autoCashout,
       clientSeed: event.clientSeed,
     ));
@@ -438,6 +458,11 @@ class GameBloc extends Bloc<GameEvent, GameState> {
     if (state.phase == GamePhase.running) {
       _wsClient.send(WsMessage.cashout(event.betId));
     }
+  }
+
+  void _onBetError(GameBetError event, Emitter<GameState> emit) {
+    // This event is handled by the bet panels via BlocListener
+    // No state change needed here — each panel resets its own _isPendingPlacement
   }
 
   @override
